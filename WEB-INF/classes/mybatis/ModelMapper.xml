@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="ModelMapper">
+	<select id="getModelInfo" resultType="com.vo.ModelVo" parameterType="String">
+		SELECT MMC_CODE, MMC_LOGC, A.MCI_LOGCNAME as MMC_LOGCNAME, MMC_LGROUP, B.MCC_S_NAME as MMC_LGROUPNAME,
+			   MMC_MGROUP, MMC_SGROUP, MMC_KINDS, C.MCC_S_NAME as MMC_KINDSNAME,
+			   MMC_UNIT, MMC_ERPMODEL,
+			   CONVERT(CHAR(10), MMC_StartDay, 23) as MMC_StartDay, CONVERT(CHAR(10), MMC_EndDay, 23) as MMC_EndDay, 
+			   MMC_BizSts, MMC_SEQ, MMC_CMNT
+		  FROM MF_MODEL_CODE 
+		       left outer join MF_CENTER_INFO A on MMC_LOGC = A.MCI_LOGC AND A.MCI_BONBU = ' ' AND A.MCI_CENTER = ' '
+			   left outer join MF_COMM_CODE B on B.MCC_L_CODE = '200' AND B.MCC_M_CODE = '201' AND MMC_LGROUP = B.MCC_S_CODE
+			   left outer join MF_COMM_CODE C on C.MCC_L_CODE = '200' AND C.MCC_M_CODE = '200' AND MMC_KINDS = C.MCC_S_CODE
+		 WHERE MMC_CODE = #{value}
+	</select>
+	<select id="getLastModelDocNo" resultType="integer" parameterType="hashmap">
+		SELECT ISNULL(MAX(MMC_SEQ), 0) AS MMC_SEQ
+		  FROM MF_MODEL_CODE 
+		 WHERE MMC_LOGC = #{MMC_LOGC} AND MMC_LGROUP = #{MMC_LGROUP} AND MMC_KINDS = #{MMC_KINDS}
+	</select>
+	<select id="getModelList" resultType="com.vo.ModelVo" parameterType="hashmap">
+		SELECT rownum, MMC_CODE, MMC_LOGC, MMC_LOGCNAME, MMC_LGROUP, MMC_LGROUPNAME,
+			   MMC_MGROUP, MMC_SGROUP, MMC_KINDS, MMC_UNIT, MMC_ERPMODEL,
+			   MMC_StartDay, MMC_EndDay, MMC_BizSts, MMC_CMNT, totalCnt 
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY MMC_LOGC, MMC_CODE ) AS rownum, 
+			       MMC_CODE, MMC_LOGC, A.MCI_LOGCNAME as MMC_LOGCNAME, MMC_LGROUP, B.MCC_S_NAME as MMC_LGROUPNAME,
+			       MMC_MGROUP, MMC_SGROUP, MMC_KINDS, MMC_UNIT, MMC_ERPMODEL,
+			       CONVERT(CHAR(10), MMC_StartDay, 23) as MMC_StartDay, CONVERT(CHAR(10), MMC_EndDay, 23) as MMC_EndDay, MMC_BizSts,
+				   MMC_CMNT, COUNT(*) OVER() AS totalCnt
+		      FROM MF_MODEL_CODE 
+			       left outer join MF_CENTER_INFO A on MMC_LOGC = A.MCI_LOGC AND A.MCI_BONBU = ' ' AND A.MCI_CENTER = ' '
+			       left outer join MF_COMM_CODE B on B.MCC_L_CODE = '200' AND B.MCC_M_CODE = '201' AND MMC_LGROUP = B.MCC_S_CODE
+		     WHERE 1=1
+		    <if test="BISSTS != null and BISSTS != ''">
+		       AND MMC_BizSts = #{BISSTS}
+		    </if>
+		    <if test="LOGC != null and LOGC != ''">
+		       AND MMC_LOGC = #{LOGC}
+		    </if>
+		    <if test="LCODE != null and LCODE != ''">
+		       AND MMC_LGROUP = #{LCODE}
+		    </if>
+		    <if test="MCODE != null and MCODE != ''">
+		       AND MMC_MGROUP = #{MCODE}
+		    </if>
+		    <if test="SCODE != null and SCODE != ''">
+		       AND MMC_SGROUP = #{SCODE}
+		    </if>
+		    <if test="MCODENAME != null and MCODENAME != ''">
+		       AND MMC_MGROUP like '%${MCODENAME}%'
+		    </if>
+		    <if test="SCODENAME != null and SCODENAME != ''">
+		       AND MMC_SGROUP like '%${SCODENAME}%'
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND MMC_CODE like '%${MNAME}%'
+		    </if>
+		)A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="MgroupList" resultType="com.vo.ModelVo" parameterType="hashmap">
+		SELECT MMC_LGROUP, MMC_MGROUP, COUNT(MMC_MGROUP) as cnt 
+		  from MF_MODEL_CODE 
+		 WHERE MMC_LOGC = #{LOGC} 
+		   AND MMC_LGROUP = #{LCODE} 
+		 group by MMC_LGROUP, MMC_MGROUP
+		 order by MMC_LGROUP, MMC_MGROUP
+	</select>
+	<select id="SgroupList" resultType="com.vo.ModelVo" parameterType="hashmap">
+		SELECT MMC_LGROUP, MMC_MGROUP, MMC_SGROUP, COUNT(MMC_SGROUP) as cnt 
+		  from MF_MODEL_CODE 
+		 WHERE MMC_LOGC = #{LOGC} 
+		   AND MMC_LGROUP = #{LCODE} 
+		   AND MMC_MGROUP = #{MCODE} 
+		 group by MMC_LGROUP, MMC_MGROUP, MMC_SGROUP
+		 order by MMC_LGROUP, MMC_MGROUP, MMC_SGROUP
+	</select>
+	<select id="ModelIlyeog" resultType="com.vo.ModelVo" parameterType="String">
+		SELECT MML_CODE, CONVERT(CHAR(19), MML_DATE, 120) as MML_DATE, MML_USER, MML_USERNAME, MML_CMNT
+		  from MF_MODEL_LOG 
+		 WHERE MML_CODE = #{value} 
+		 order by MML_DATE desc
+	</select>
+	<insert id="insertModel" parameterType="com.vo.ModelVo">
+	    insert into MF_MODEL_CODE(MMC_CODE, MMC_LOGC, MMC_LGROUP, MMC_MGROUP, MMC_SGROUP, MMC_KINDS, MMC_UNIT, MMC_ERPMODEL,
+	    						MMC_StartDay, MMC_EndDay, MMC_BizSts, MMC_SEQ, MMC_CMNT,
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{MMC_CODE},#{MMC_LOGC},#{MMC_LGROUP},#{MMC_MGROUP},#{MMC_SGROUP},#{MMC_KINDS},#{MMC_UNIT},#{MMC_ERPMODEL},
+	     		#{MMC_StartDay},#{MMC_EndDay},#{MMC_BizSts},#{MMC_SEQ},#{MMC_CMNT},
+	     		'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<insert id="insertModelIlyeog" parameterType="com.vo.ModelVo">
+	    insert into MF_MODEL_LOG(MML_CODE, MML_DATE, MML_USER, MML_USERNAME, MML_CMNT)
+	         SELECT #{MML_CODE}, getdate(), MUT_UserID, MUT_UserName, #{MML_CMNT}
+	           FROM MF_USER_TBL
+	          WHERE MUT_UserID = #{MML_USER}
+	</insert>
+	<update id="updateModel" parameterType="com.vo.ModelVo">
+	    update MF_MODEL_CODE 
+	       set MMC_MGROUP = #{MMC_MGROUP},
+	       	   MMC_SGROUP = #{MMC_SGROUP},
+	       	   MMC_UNIT = #{MMC_UNIT},
+	       	   MMC_StartDay = #{MMC_StartDay},
+	       	   MMC_EndDay = #{MMC_EndDay},
+	       	   MMC_BizSts = #{MMC_BizSts},
+	       	   MMC_CMNT = #{MMC_CMNT},
+	       	   MMC_ERPMODEL = #{MMC_ERPMODEL},
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MMC_CODE = #{MMC_CODE}
+	</update>
+	<delete id="deleteModel" parameterType="String">
+	    delete from MF_MODEL_CODE
+	     where MMC_CODE = #{value}
+	</delete>
+	<delete id="deleteModelIlyeog" parameterType="String">
+	    delete from MF_MODEL_LOG
+	     where MML_CODE = #{value}
+	</delete>
+	<select id="MgroupAndroidList" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+		SELECT MMC_LGROUP, MMC_MGROUP, COUNT(MMC_MGROUP) as cnt 
+		  from MF_MODEL_CODE 
+		 WHERE MMC_LOGC = #{LOGC} 
+		   AND MMC_LGROUP = #{LCODE} 
+		 group by MMC_LGROUP, MMC_MGROUP
+		 order by MMC_LGROUP, MMC_MGROUP
+	</select>
+	<select id="SgroupAndroidList" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+		SELECT MMC_LGROUP, MMC_MGROUP, MMC_SGROUP, COUNT(MMC_SGROUP) as cnt 
+		  from MF_MODEL_CODE 
+		 WHERE MMC_LOGC = #{LOGC} 
+		   AND MMC_LGROUP = #{LCODE} 
+		   AND MMC_MGROUP = #{MCODE} 
+		 group by MMC_LGROUP, MMC_MGROUP, MMC_SGROUP
+		 order by MMC_LGROUP, MMC_MGROUP, MMC_SGROUP
+	</select>
+	<select id="getAndroidModelList" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+		SELECT MMC_CODE, MMC_LOGC, A.MCI_LOGCNAME as MMC_LOGCNAME, MMC_LGROUP, B.MCC_S_NAME as MMC_LGROUPNAME,
+			   MMC_MGROUP, MMC_SGROUP, MMC_KINDS, MMC_UNIT, MMC_ERPMODEL,
+			   CONVERT(CHAR(10), MMC_StartDay, 23) as MMC_StartDay, CONVERT(CHAR(10), MMC_EndDay, 23) as MMC_EndDay, MMC_BizSts
+		  FROM MF_MODEL_CODE 
+			   left outer join MF_CENTER_INFO A on MMC_LOGC = A.MCI_LOGC AND A.MCI_BONBU = ' ' AND A.MCI_CENTER = ' '
+			   left outer join MF_COMM_CODE B on B.MCC_L_CODE = '200' AND B.MCC_M_CODE = '201' AND MMC_LGROUP = B.MCC_S_CODE
+		 WHERE MMC_BizSts = 'Y'
+		<if test="LOGC != null and LOGC != ''">
+		   AND MMC_LOGC = #{LOGC}
+		</if>
+		<if test="LCODE != null and LCODE != ''">
+		   AND MMC_LGROUP = #{LCODE}
+		</if>
+		<if test="MCODE != null and MCODE != ''">
+		   AND MMC_MGROUP = #{MCODE}
+		</if>
+		<if test="SCODE != null and SCODE != ''">
+		   AND MMC_SGROUP = #{SCODE}
+		</if>
+		<if test="MNAME != null and MNAME != ''">
+		   AND MMC_CODE like '%${MNAME}%'
+		</if>
+		order by MMC_LOGC, MMC_CODE
+	</select>
+</mapper>

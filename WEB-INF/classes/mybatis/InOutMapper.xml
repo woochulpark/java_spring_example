@@ -1,0 +1,1935 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="InOutMapper">
+	<select id="getLogcInInfo" resultType="com.vo.LogcInVo" parameterType="String">
+		SELECT DIL_DOCNO, DIL_LOGC, MCI_LOGCNAME,
+			   DIL_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME,
+			   MMC_MGROUP, MMC_SGROUP, 
+			   CONVERT(CHAR(10), DIL_JEJO, 23) as DIL_JEJO, 
+			   CONVERT(CHAR(10), DIL_INDate, 23) as DIL_INDate, 
+			   DIL_INPRICE, DIL_QTY, DIL_INPRICE * DIL_QTY as INTOTAL,
+			   DIL_OUTSts, ISNULL(A.OUTTOTAL,'0') as OUTTOTAL,
+			   CONVERT(CHAR(10), DIL_OUTDATE, 23) as DIL_OUTDATE,
+			   B.SUS_CNT as SUS_CNT
+		  FROM MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE, DT_IN_LOGC
+		       left outer join (select DBI_TOPDOCNO, SUM(DBI_QTY) as OUTTOTAL from DT_BONBU_IN group by DBI_TOPDOCNO ) A on DIL_DOCNO = A.DBI_TOPDOCNO
+			   left outer join (SELECT DBI_TOPDOCNO, SUM(CASE WHEN DBI_BisSts = 'Y' then 1 else 0 end) AS SUS_CNT FROM DT_BONBU_IN group by DBI_TOPDOCNO ) B on DIL_DOCNO = B.DBI_TOPDOCNO
+		 WHERE DIL_DOCNO = #{value}
+		   AND DIL_LOGC = MCI_LOGC AND MCI_BONBU = ' ' AND MCI_CENTER = ' '
+		   AND DIL_MODEL = MMC_CODE
+		   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE  
+	</select>
+	<select id="getLastLogcInDocNo" resultType="com.vo.LogcInVo">
+		SELECT CONVERT(CHAR(8), GETDATE(), 112) as CMN_MAK_DATE, ISNULL(MAX(DIL_SEQ), 0) AS DIL_SEQ
+		  FROM DT_IN_LOGC 
+		 WHERE convert(char(8), CMN_MAK_DATE , 112) = CONVERT(CHAR(8), GETDATE(), 112)
+	</select>
+	<select id="getLogcInList" resultType="com.vo.LogcInVo" parameterType="hashmap">
+		SELECT rownum, DIL_DOCNO, DIL_LOGC, MCI_LOGCNAME, DIL_MODEL, MMC_LGROUP, MMC_LGROUPNAME,
+			   MMC_MGROUP, MMC_SGROUP, DIL_JEJO, DIL_INDate, DIL_INPRICE,
+			   DIL_QTY, INTOTAL, bizSTS, DIL_OUTSts, totalCnt 
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY DIL_INDate desc, DIL_LOGC ) AS rownum, 
+				   DIL_DOCNO, DIL_LOGC, MCI_LOGCNAME,
+			       DIL_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME,
+			       MMC_MGROUP, MMC_SGROUP, 
+			       CONVERT(CHAR(10), DIL_JEJO, 23) as DIL_JEJO, 
+			       CONVERT(CHAR(10), DIL_INDate, 23) as DIL_INDate, 
+			       DIL_INPRICE, DIL_QTY, DIL_INPRICE * DIL_QTY as INTOTAL,
+			       case when DBI_TOPDOCNO IS NULL then '0'
+			       		when not B_CNT = SUS_CNT then '1' 
+			       		when B_CNT = SUS_CNT then '2' 
+			       		else '0' end as bizSTS,
+				   DIL_OUTSts, COUNT(*) OVER() AS totalCnt
+		      FROM MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE, DT_IN_LOGC
+		           left outer join (SELECT DBI_TOPDOCNO, COUNT(DBI_DOCNO) as B_CNT, SUM(CASE WHEN DBI_BisSts = 'Y' then 1 else 0 end) AS SUS_CNT FROM DT_BONBU_IN group by DBI_TOPDOCNO) B on DIL_DOCNO = B.DBI_TOPDOCNO
+		     WHERE DIL_LOGC = MCI_LOGC AND MCI_BONBU = ' ' AND MCI_CENTER = ' '
+		       AND DIL_MODEL = MMC_CODE
+		       AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+		    <if test="StartDay == '' and EndDay != ''">
+		       AND DIL_INDate <![CDATA[<=]]> #{EndDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay == ''">
+		   	   AND DIL_INDate <![CDATA[>=]]> #{StartDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay != ''">
+		       AND DIL_INDate between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != null and LOGC != ''">
+		       AND DIL_LOGC = #{LOGC}
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND DIL_MODEL like '%${MNAME}%'
+		    </if>
+		    <if test="BISSTS != null and !BISSTS.equals('')  ">
+		    <if test="BISSTS == 0 ">
+		       AND DBI_TOPDOCNO IS NULL
+		    </if>
+		    <if test="BISSTS == 1 ">
+		       AND not B_CNT = SUS_CNT
+		    </if>
+		    <if test="BISSTS == 2 ">
+		       AND B_CNT = SUS_CNT
+		    </if>
+		    </if>
+		)A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<insert id="insertLogcIn" parameterType="com.vo.LogcInVo">
+	    insert into DT_IN_LOGC(DIL_DOCNO, DIL_INDate, DIL_SEQ, DIL_LOGC, DIL_MODEL, DIL_JEJO, DIL_INPRICE, DIL_QTY, DIL_OUTSts, 
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{DIL_DOCNO},#{DIL_INDate},#{DIL_SEQ},#{DIL_LOGC},#{DIL_MODEL},#{DIL_JEJO},#{DIL_INPRICE},#{DIL_QTY},#{DIL_OUTSts},
+	     		'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<update id="updateLogcIn" parameterType="com.vo.LogcInVo">
+	 	update DT_IN_LOGC 
+	       set DIL_INDate = #{DIL_INDate},
+	       	   DIL_JEJO = #{DIL_JEJO},
+	       	   DIL_INPRICE = #{DIL_INPRICE},
+	       	   DIL_QTY = #{DIL_QTY},
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where DIL_DOCNO = #{DIL_DOCNO}
+	</update>
+	<delete id="deleteLogcIn" parameterType="String">
+	    delete from DT_IN_LOGC
+	     where DIL_DOCNO = #{value}
+	</delete>
+	<select id="getBonbuInList" resultType="com.vo.LogcInVo" parameterType="hashmap">
+		SELECT rownum, DIL_DOCNO, DIL_LOGC, MCI_LOGCNAME, DIL_MODEL, MMC_LGROUP, MMC_LGROUPNAME,
+			   MMC_MGROUP, MMC_SGROUP, DIL_JEJO, DIL_INDate, DIL_OUTDATE, DIL_INPRICE,
+			   DIL_QTY, INTOTAL, bizSTS, DIL_OUTSts, totalCnt 
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY DIL_INDate desc, DIL_LOGC ) AS rownum, 
+				   DIL_DOCNO, DIL_LOGC, MCI_LOGCNAME,
+			       DIL_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME,
+			       MMC_MGROUP, MMC_SGROUP, 
+			       CONVERT(CHAR(10), DIL_JEJO, 23) as DIL_JEJO, 
+			       CONVERT(CHAR(10), DIL_INDate, 23) as DIL_INDate, 
+			       CONVERT(CHAR(10), DIL_OUTDATE, 23) as DIL_OUTDATE, 
+			       DIL_INPRICE, DIL_QTY, DIL_INPRICE * DIL_QTY as INTOTAL,
+			       case when DBI_TOPDOCNO = NULL then '0'
+			       		when B_CNT = 0 then '0'
+			       		when not B_CNT = SUS_CNT then '1' 
+			       		when B_CNT = SUS_CNT then '2' 
+			       		else '0' end as bizSTS,
+				   DIL_OUTSts, COUNT(*) OVER() AS totalCnt
+		      FROM MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE, DT_IN_LOGC
+		      	   left outer join (SELECT DBI_TOPDOCNO, COUNT(DBI_DOCNO) as B_CNT, SUM(CASE WHEN DBI_BisSts = 'Y' then 1 else 0 end) AS SUS_CNT FROM DT_BONBU_IN group by DBI_TOPDOCNO) B on DIL_DOCNO = B.DBI_TOPDOCNO
+		     WHERE DIL_OUTSts = 'Y' 
+		       AND DIL_LOGC = MCI_LOGC AND MCI_BONBU = ' ' AND MCI_CENTER = ' '
+		       AND DIL_MODEL = MMC_CODE
+		       AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+		    <if test="InStartDay == '' and InEndDay != ''">
+		       AND DIL_INDate <![CDATA[<=]]> #{InEndDay}
+		       </if>
+		    <if test="InStartDay != '' and InEndDay == ''">
+		       AND DIL_INDate <![CDATA[>=]]> #{InStartDay}
+		    </if>
+		    <if test="InStartDay != '' and InEndDay != ''">
+		       AND DIL_INDate between #{InStartDay} AND #{InEndDay}
+		    </if>
+		    <if test="OutStartDay == '' and OutEndDay != ''">
+		       AND DIL_OUTDATE <![CDATA[<=]]> #{OutEndDay}
+		       </if>
+		    <if test="OutStartDay != '' and OutEndDay == ''">
+		       AND DIL_OUTDATE <![CDATA[>=]]> #{OutStartDay}
+		    </if>
+		    <if test="OutStartDay != '' and OutEndDay != ''">
+		       AND DIL_OUTDATE between #{OutStartDay} AND #{OutEndDay}
+		    </if>
+		    <if test="LOGC != null and LOGC != ''">
+		       AND DIL_LOGC = #{LOGC}
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND DIL_MODEL like '%${MNAME}%'
+		    </if>
+		)A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getBonbuInCheck" resultType="com.vo.BonbuVo" parameterType="String">
+		SELECT DBI_DOCNO, DIL_MODEL, CONVERT(CHAR(10), DIL_OUTDATE, 23) as DIL_OUTDATE, MCI_BonbuNAME, MCI_CenterName, 
+		       DIL_QTY, CONVERT(CHAR(10), DBI_CFMDATE, 23) as DBI_CFMDATE, DBI_BisSts
+		  FROM DT_IN_LOGC, DT_BONBU_IN
+		  	   left outer join MF_CENTER_INFO on DBI_CENTER = MCI_CODE
+		 WHERE DIL_DOCNO = #{DOCNO}
+		   AND DIL_DOCNO = DBI_TOPDOCNO
+	</select>
+	<select id="getBonbuInInfo" resultType="com.vo.BonbuVo" parameterType="hashmap">
+		SELECT MCI_CODE, MCI_BonbuNAME, MCI_CenterName, ISNULL(MMJ_JEGO,'0') as MMJ_JEGO, ISNULL(DMJ_JEGO,'0') as DMJ_JEGO, DBI_DOCNO, ISNULL(DBI_QTY,'0') as DBI_QTY, DBI_BisSts
+		  FROM MF_CENTER_INFO
+		       left outer join DT_BONBU_IN on MCI_CODE = DBI_CENTER and DBI_TOPDOCNO = #{DOCNO}
+		       left outer join MF_MODEL_JEGO on MCI_CODE = MMJ_CENTER and MMJ_MODEL = #{MODEL}
+		       left outer join DT_MODEL_JEGO on MCI_CODE = DMJ_CENTER and DMJ_MODEL = #{MODEL}
+		 WHERE MCI_LOGC = #{LOGC} 
+		   AND NOT MCI_Bonbu = ' ' 
+		   AND NOT MCI_Center = ' '
+		   AND (DBI_CENTER is not null or DBI_CENTER is null and MCI_BizSts = 'Y') 
+	</select>
+	<select id="getBonbuInCount" resultType="integer" parameterType="String">
+		SELECT COUNT(DBI_DOCNO) 
+		  FROM DT_BONBU_IN
+		 WHERE DBI_TOPDOCNO = #{value}
+	</select>
+	<select id="getLastBonbuInDocNo" resultType="com.vo.BonbuVo">
+		SELECT CONVERT(CHAR(8), GETDATE(), 112) as CMN_MAK_DATE, ISNULL(MAX(DBI_SEQ), 0) AS DBI_SEQ
+		  FROM DT_BONBU_IN 
+		 WHERE convert(char(8), CMN_MAK_DATE , 112) = CONVERT(CHAR(8), GETDATE(), 112)
+	</select>
+	<update id="updateModelJego" parameterType="hashmap">
+		MERGE INTO MF_MODEL_JEGO A
+		USING (SELECT #{MODEL} AS MODEL, #{CENTER} AS CENTER ) B ON(A.MMJ_MODEL = B.MODEL AND A.MMJ_CENTER = B.CENTER)
+		WHEN MATCHED THEN
+		UPDATE SET MMJ_JEGO = #{JEGO},
+		           CMN_UPD_DATE = getdate(),
+		           CMN_UPD_PROG = #{PROG},
+	       	   	   CMN_UPD_ID = #{USERID}
+		WHEN NOT MATCHED THEN
+		INSERT (MMJ_MODEL, MMJ_CENTER, MMJ_JEGO, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID) 
+		values (#{MODEL}, #{CENTER}, #{JEGO}, 'N', getdate(), #{PROG}, #{USERID}, getdate(), #{PROG}, #{USERID});
+	</update>
+	<insert id="insertBonbuIn" parameterType="com.vo.BonbuVo">
+	    insert into DT_BONBU_IN(DBI_TOPDOCNO, DBI_CENTER, DBI_QTY, DBI_BisSts, DBI_DOCNO, DBI_SEQ,
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{DBI_TOPDOCNO},#{DBI_CENTER},#{DBI_QTY},#{DBI_BisSts},#{DBI_DOCNO},#{DBI_SEQ},
+	     		'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<insert id="insertInOut" parameterType="com.vo.InOutVo">
+	    insert into DT_INOUT_BONBU(DIB_DOCNO, DIB_MODEL, DIB_IOTYPE, DIB_IODATE, DIB_QTY, DIB_RESN, DIB_CENTER,
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{DIB_DOCNO},#{DIB_MODEL},#{DIB_IOTYPE},#{DIB_IODATE},#{DIB_QTY},#{DIB_RESN},#{DIB_CENTER},
+	     		'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<update id="updatePriceJego" parameterType="hashmap">
+		update DT_PRICE_IN
+		   set DPI_OUTQTY = B.DPI_OUTQTY + #{JEGO}
+		  FROM DT_PRICE_IN B
+		 WHERE DPI_DOCNO = #{DOCNO}
+		   AND DPI_CENTER = #{CENTER}
+		   AND DPI_MODEL = #{MODEL}
+		   AND DPI_LOGCNO = #{LOGCNO}
+		   AND DPI_DOCNO = B.DPI_DOCNO
+		   AND DPI_CENTER = B.DPI_CENTER
+		   AND DPI_MODEL = B.DPI_MODEL
+		   AND DPI_LOGCNO = B.DPI_LOGCNO
+		   <if test="JEGO lt 0">
+		   AND DPI_OUTQTY <![CDATA[>=]]> (#{JEGO}*(-1))
+		   </if>
+	</update>
+	<update id="updatePriceOutJego" parameterType="hashmap">
+		update DT_PRICE_OUT
+		   set DPO_QTY = B.DPO_QTY + #{JEGO}
+		  FROM DT_PRICE_OUT B, DT_PRICE_IN
+         WHERE DPO_INDOCNO = #{DOCNO}
+           AND DPO_DOCNO = #{OUTDOCNO}
+           AND DPO_CENTER = #{CENTER}
+           AND DPO_MODEL = #{MODEL}
+           AND DPO_LOGCNO = #{LOGCNO}
+           AND DPO_INDOCNO = B.DPO_INDOCNO
+           AND DPO_DOCNO = B.DPO_DOCNO
+           AND DPO_CENTER = B.DPO_CENTER
+           AND DPO_MODEL = B.DPO_MODEL
+           AND DPO_LOGCNO = B.DPO_LOGCNO
+           AND B.DPO_INDOCNO = DPI_DOCNO
+           AND B.DPO_CENTER = DPI_CENTER
+           AND B.DPO_MODEL = DPI_MODEL
+           AND B.DPO_LOGCNO = DPI_LOGCNO
+           AND (B.DPO_QTY + #{JEGO}) between 1 and DPI_QTY
+	</update>
+	<delete id="deletePriceOutJego" parameterType="hashmap">
+		delete from DT_PRICE_OUT
+	     where DPO_INDOCNO = #{DOCNO}
+	       AND DPO_DOCNO = #{OUTDOCNO}
+	       AND DPO_CENTER = #{CENTER}
+	       AND DPO_MODEL = #{MODEL}
+	       AND DPO_LOGCNO = #{LOGCNO}
+	</delete>
+	<select id="getPriceList" resultType="com.vo.PriceInVo" parameterType="hashmap">
+	 SELECT DPI_DOCNO, DPI_CENTER, DPI_MODEL, DPI_LOGCNO, DPI_QTY, DPI_PRICE, DPI_OUTQTY
+	   FROM DT_PRICE_IN, DT_INOUT_BONBU
+      WHERE DPI_CENTER = #{CENTER}
+        AND DPI_MODEL = #{MODEL}
+        AND DPI_OUTQTY > 0
+        AND DIB_DOCNO = DPI_DOCNO
+        AND DIB_IOTYPE = '1'
+        AND DIB_CENTER = DPI_CENTER
+        AND DIB_MODEL = DPI_MODEL
+      ORDER BY DIB_IODATE, DT_INOUT_BONBU.CMN_MAK_DATE
+	</select>
+	<select id="getPriceJego" resultType="com.vo.PriceInVo" parameterType="hashmap">
+	 SELECT DPI_DOCNO, DPI_OUTQTY, DPI_LOGCNO, DPO_QTY as JEGO
+	   FROM DT_PRICE_IN, DT_PRICE_OUT, DT_INOUT_BONBU
+      WHERE DPI_DOCNO = DPO_INDOCNO
+        AND DPI_LOGCNO = DPO_LOGCNO
+        AND DPO_DOCNO = #{OUTDOCNO}
+        AND DPO_CENTER = #{CENTER}
+        AND DPO_MODEL = #{MODEL}
+        AND DIB_DOCNO = DPI_DOCNO
+        AND DIB_IOTYPE = '1'
+        AND DIB_CENTER = DPI_CENTER
+        AND DIB_MODEL = DPI_MODEL
+      ORDER BY DIB_IODATE DESC, DT_INOUT_BONBU.CMN_MAK_DATE DESC
+	</select>
+	<select id="getCheckPrice" resultType="integer" parameterType="String">
+		SELECT COUNT(DBI_DOCNO) 
+		  FROM DT_PRICE_IN, DT_PRICE_OUT 
+		 WHERE DPI_DOCNO = DPO_INDOCNO 
+	       AND DPI_CENTER = DPO_CENTER 
+	       AND DPI_MODEL = DPO_MODEL
+	       AND DPI_LOGCNO = DPO_LOGCNO
+	       AND DPI_DOCNO = #{value}
+	       AND DPI_PRICE <![CDATA[<]]> DPO_PRICE
+	</select>
+	<insert id="insertPriceBonbuIn" parameterType="com.vo.PriceInVo">
+	    insert into DT_PRICE_IN(DPI_DOCNO, DPI_CENTER, DPI_MODEL, DPI_LOGCNO, DPI_QTY, DPI_PRICE, DPI_OUTQTY,
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	    SELECT DBI_DOCNO, DBI_CENTER, DIL_MODEL, DIL_DOCNO, DBI_QTY, DIL_INPRICE, DBI_QTY,
+	           'N', getdate(), #{CMN_MAK_PROG}, #{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID}
+	      FROM DT_IN_LOGC, DT_BONBU_IN
+	     WHERE DIL_DOCNO = DBI_TOPDOCNO
+	       AND DBI_DOCNO = #{DPI_DOCNO}
+	</insert>
+	<insert id="insertPriceMoveIn" parameterType="com.vo.PriceOutVo">
+	    insert into DT_PRICE_IN(DPI_DOCNO, DPI_CENTER, DPI_MODEL, DPI_LOGCNO, DPI_QTY, DPI_PRICE, DPI_OUTQTY,
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	    SELECT DPO_DOCNO, DBO_CENTER, DBO_MODEL, DPO_LOGCNO, DPO_QTY, DPO_PRICE, DPO_QTY,
+	           'N', getdate(), #{CMN_MAK_PROG}, #{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID}
+	      FROM (
+	            SELECT DPO_DOCNO, DBO_CENTER, DBO_MODEL, DPO_LOGCNO, DPO_PRICE, SUM(DPO_QTY) as DPO_QTY
+	              FROM DT_PRICE_OUT, DT_BONBU_ORDER 
+	             WHERE DPO_DOCNO = #{DPO_DOCNO}
+	               AND DPO_DOCNO = DBO_DOCNO
+	             GROUP BY DPO_DOCNO, DBO_CENTER, DBO_MODEL, DPO_LOGCNO, DPO_PRICE
+	           ) a
+	</insert>
+	<insert id="insertPriceMoveOut" parameterType="com.vo.PriceOutVo">
+	    insert into DT_PRICE_OUT(DPO_DOCNO, DPO_CENTER, DPO_MODEL, DPO_LOGCNO, DPO_INDOCNO, DPO_QTY, DPO_PRICE,
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+         values(#{DPO_DOCNO},#{DPO_CENTER},#{DPO_MODEL},#{DPO_LOGCNO},#{DPO_INDOCNO},#{DPO_QTY},#{DPO_PRICE},
+	     	  'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<update id="updateOutLogcIn" parameterType="com.vo.LogcInVo">
+	 	update DT_IN_LOGC 
+	       set DIL_OUTSts = #{DIL_OUTSts},
+	       	   DIL_OUTDATE = #{DIL_OUTDATE},
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where DIL_DOCNO = #{DIL_DOCNO}
+	</update>
+	<update id="updateBonbuIn" parameterType="com.vo.BonbuVo">
+		MERGE INTO DT_BONBU_IN A
+		USING (SELECT #{DBI_TOPDOCNO} AS DBI_TOPDOCNO, #{DBI_CENTER} AS DBI_CENTER, #{DBI_QTY} as DBI_QTY ) B ON(A.DBI_TOPDOCNO = B.DBI_TOPDOCNO AND A.DBI_CENTER = B.DBI_CENTER)
+		WHEN NOT MATCHED AND B.DBI_QTY > 0 THEN
+		INSERT (DBI_TOPDOCNO, DBI_CENTER, DBI_QTY, DBI_BisSts, DBI_DOCNO, DBI_SEQ, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID) 
+		values (#{DBI_TOPDOCNO}, #{DBI_CENTER}, #{DBI_QTY}, #{DBI_BisSts}, #{DBI_DOCNO}, #{DBI_SEQ}, 'N', getdate(), #{CMN_MAK_PROG}, #{CMN_MAK_ID}, getdate(), #{CMN_UPD_PROG}, #{CMN_UPD_ID})
+		WHEN MATCHED AND B.DBI_QTY > 0 AND A.DBI_BisSts = 'N' THEN
+		UPDATE SET DBI_QTY = #{DBI_QTY},
+		           CMN_UPD_DATE = getdate(),
+		           CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   	   CMN_UPD_ID = #{CMN_UPD_ID}
+	    WHEN MATCHED AND B.DBI_QTY = 0 AND A.DBI_BisSts = 'N' THEN 
+	    	DELETE;
+	</update>
+	<delete id="deleteBonbuIn" parameterType="String">
+	    delete from DT_BONBU_IN
+	     where DBI_TOPDOCNO = #{value}
+	       AND DBI_BisSts = 'N'
+	</delete>
+	<select id="getOrderInfo" resultType="com.vo.OrderVo" parameterType="String">
+		SELECT DBO_DOCNO, DBO_CENTER, MCI_BonbuNAME, MCI_CenterName,
+			   DBO_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME,
+			   MMC_MGROUP, MMC_SGROUP, 
+			   CONVERT(CHAR(10), DBO_DATE, 23) as DBO_DATE, 
+			   DBO_USER, MUT_UserName as DBO_USERNAME, DBO_QTY,
+			   DBM_Sts, ISNULL(DBM_QTY,'0') as DBM_QTY, DBO_BisSts, 
+			   CONVERT(CHAR(10), DBO_CFMDATE, 23) as DBO_CFMDATE,
+			   DBO_CMNT, DBM_CFM
+		  FROM MF_USER_TBL, MF_COMM_CODE, MF_MODEL_CODE, MF_CENTER_INFO, DT_BONBU_MOVE, DT_BONBU_ORDER
+		 WHERE DBO_DOCNO = #{value}
+		   AND DBO_DOCNO = DBM_DOCNO
+		   AND DBO_CENTER = MCI_CODE
+		   AND DBO_MODEL = MMC_CODE
+		   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+		   AND DBO_USER = MUT_UserID
+	</select>
+	<select id="getOrderList" resultType="com.vo.OrderVo" parameterType="hashmap">
+		SELECT rownum, DBO_DOCNO, DBO_CENTER, MCI_BonbuNAME, MCI_CenterName,
+			   DBO_MODEL, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+			   DBO_DATE, DBO_USER, DBO_USERNAME, DBO_QTY, DBM_Sts, DBM_QTY, 
+			   DBO_BisSts, DBO_CFMDATE, totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY DBO_DATE desc, DBO_CENTER ) AS rownum, 
+				   DBO_DOCNO, DBO_CENTER, MCI_BonbuNAME, MCI_CenterName,
+			       DBO_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME,
+			       MMC_MGROUP, MMC_SGROUP, 
+			       CONVERT(CHAR(10), DBO_DATE, 23) as DBO_DATE, 
+			       DBO_USER, MUT_UserName as DBO_USERNAME, DBO_QTY,
+			       DBM_Sts, ISNULL(DBM_QTY,'0') as DBM_QTY, DBO_BisSts, 
+			       CONVERT(CHAR(10), DBO_CFMDATE, 23) as DBO_CFMDATE,
+			       COUNT(*) OVER() AS totalCnt
+		      FROM MF_USER_TBL, MF_COMM_CODE, MF_MODEL_CODE, MF_CENTER_INFO, DT_BONBU_MOVE, DT_BONBU_ORDER
+		     WHERE DBO_DOCNO = DBM_DOCNO 
+		       AND DBO_CENTER = MCI_CODE
+		       AND DBO_MODEL = MMC_CODE
+		       AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+		       AND DBO_USER = MUT_UserID
+		    <if test="StartDay == '' and EndDay != ''">
+		       AND DBO_DATE <![CDATA[<=]]> #{EndDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay == ''">
+		       AND DBO_DATE <![CDATA[>=]]> #{StartDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay != ''">
+		       AND DBO_DATE between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != null and LOGC != ''">
+		       AND MCI_LOGC = #{LOGC}
+		    </if>
+		    <if test="BONBU != null and BONBU != ''">
+		       AND MCI_BONBU = #{BONBU}
+		    </if>
+		    <if test="CENTER != null and CENTER != ''">
+		       AND MCI_CENTER = #{CENTER}
+		    </if>
+		    <if test="CCODE != null and CCODE != ''">
+		       AND MCI_CODE = #{CCODE}
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND DBO_MODEL like '%${MNAME}%'
+		    </if>
+		)A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getLastOrderDocNo" resultType="com.vo.OrderVo">
+		SELECT CONVERT(CHAR(8), GETDATE(), 112) as CMN_MAK_DATE, ISNULL(MAX(DBO_SEQ), 0) AS DBO_SEQ
+		  FROM DT_BONBU_ORDER 
+		 WHERE convert(char(8), CMN_MAK_DATE , 112) = CONVERT(CHAR(8), GETDATE(), 112)
+	</select>
+	<insert id="insertOrder" parameterType="com.vo.OrderVo">
+	    insert into DT_BONBU_ORDER(DBO_DOCNO, DBO_SEQ, DBO_CENTER, DBO_USER, DBO_DATE, DBO_QTY,DBO_BisSts,DBO_CFMDATE,DBO_MODEL,DBO_CMNT,
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{DBO_DOCNO},#{DBO_SEQ},#{DBO_CENTER},#{DBO_USER},#{DBO_DATE},#{DBO_QTY},#{DBO_BisSts},#{DBO_CFMDATE},#{DBO_MODEL},#{DBO_CMNT},
+	     		'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<insert id="insertMove" parameterType="com.vo.OrderVo">
+	    insert into DT_BONBU_MOVE(DBM_DOCNO, DBM_CFM, DBM_Sts, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{DBO_DOCNO}, 'N', 'N', 'N', getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<update id="updateOrder" parameterType="com.vo.OrderVo">
+	 	update DT_BONBU_ORDER 
+	       set DBO_DATE = #{DBO_DATE},
+	       	   DBO_QTY = #{DBO_QTY},
+	       	   DBO_CMNT = #{DBO_CMNT},
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where DBO_DOCNO = #{DBO_DOCNO}
+	       and DBO_BisSts = 'N'
+   		   and not EXISTS(
+   		   		<if test="LEVEL == '001' or LEVEL == '002'">
+	       		SELECT DBM_DOCNO from DT_BONBU_MOVE where DBO_DOCNO = DBM_DOCNO and DBM_Sts = 'Y'
+	       		</if>
+	       		<if test="LEVEL == '003' or LEVEL == '004'">
+	       		SELECT DBM_DOCNO from DT_BONBU_MOVE where DBO_DOCNO = DBM_DOCNO and (DBM_Sts = 'Y' or DBM_CFM = 'Y' )
+	       		</if>
+	        )
+	</update>
+	<delete id="deleteOrder" parameterType="hashmap">
+		delete from DT_BONBU_ORDER
+	     where DBO_DOCNO = #{DOCNO}
+	        and DBO_BisSts = 'N'
+	        and not EXISTS(
+	        	<if test="LEVEL == '001' or CENTER == '002'">
+	       		SELECT DBM_DOCNO from DT_BONBU_MOVE where DBO_DOCNO = DBM_DOCNO and DBM_Sts = 'Y'
+	       		</if>
+	       		<if test="LEVEL == '003' or CENTER == '004'">
+	       		SELECT DBM_DOCNO from DT_BONBU_MOVE where DBO_DOCNO = DBM_DOCNO and (DBM_Sts = 'Y' or DBM_CFM = 'Y' )
+	       		</if>
+	        )
+	</delete>
+	<delete id="deleteMOVE" parameterType="hashmap">
+		delete from DT_BONBU_MOVE
+	     where DBM_DOCNO = #{DOCNO}
+	       and DBM_Sts = 'N'
+	       <if test="LEVEL == '003' or CENTER == '004'">
+	       and DBM_CFM = 'N'
+	       </if>
+	</delete>
+	<select id="getBonbuMOVEList" resultType="com.vo.MoveVo" parameterType="hashmap">
+		SELECT rownum, DBO_DOCNO, DBO_MODEL, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+			   OUTBONBUNAME, OUTCENTERNAME, INBONBUNAME, INCENTERNAME, 
+			   DBO_DATE, DBM_DATE, DBO_CFMDATE, DBM_Sts, DBO_BisSts, totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY DBM_Sts, DBO_BisSts, DBO_DATE DESC, DBM_DATE DESC, DBO_CFMDATE DESC) AS rownum, 
+				   DBO_DOCNO, DBO_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+				   A.MCI_BonbuNAME AS OUTBONBUNAME, A.MCI_CenterName AS OUTCENTERNAME,
+				   B.MCI_BonbuNAME AS INBONBUNAME, B.MCI_CenterName AS INCENTERNAME,
+				   CONVERT(CHAR(10), DBO_DATE, 23) as DBO_DATE, 
+			       CONVERT(CHAR(10), DBM_DATE, 23) as DBM_DATE, 
+			       CONVERT(CHAR(10), DBO_CFMDATE, 23) as DBO_CFMDATE,
+			       DBM_Sts, DBO_BisSts,
+			       COUNT(*) OVER() AS totalCnt
+			  FROM DT_BONBU_MOVE
+		      	   left outer join MF_CENTER_INFO A on DBM_CENTER = A.MCI_CODE,
+		      	   DT_BONBU_ORDER, MF_CENTER_INFO B, MF_MODEL_CODE, MF_COMM_CODE
+			 WHERE DBM_DOCNO = DBO_DOCNO
+			   AND DBO_CENTER = B.MCI_CODE
+			   AND DBO_MODEL = MMC_CODE
+			   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+			 	<if test="OutStartDay != '' or OutEndDay != ''">
+			 	AND 
+		       	(
+		           	DBM_DATE is null or
+		    		<if test="OutStartDay == '' and OutEndDay != ''">
+		       		DBM_DATE <![CDATA[<=]]> #{OutEndDay}
+		    		</if>
+		    		<if test="OutStartDay != '' and OutEndDay == ''">
+		       		DBM_DATE <![CDATA[>=]]> #{OutStartDay}
+		    		</if>
+		    		<if test="OutStartDay != '' and OutEndDay != ''">
+		       		DBM_DATE between #{OutStartDay} AND #{OutEndDay}
+		    		</if>
+		       	)
+			 	</if>
+			 	<if test="InStartDay != '' or InEndDay != ''">
+			 	AND 
+		       	(
+		           	DBO_CFMDATE is null or
+		    		<if test="InStartDay == '' and InEndDay != ''">
+		       		DBO_CFMDATE <![CDATA[<=]]> #{InEndDay}
+		    		</if>
+		    		<if test="InStartDay != '' and InEndDay == ''">
+		       		DBO_CFMDATE <![CDATA[>=]]> #{InStartDay}
+		    		</if>
+		    		<if test="InStartDay != '' and InEndDay != ''">
+		       		DBO_CFMDATE between #{InStartDay} AND #{InEndDay}
+		    		</if>
+		       	)
+			 	</if>
+			 	<if test="INLOGC != '' or INBONBU != '' or INCENTER != ''">
+			   	AND 
+		       	(
+		           	B.MCI_LOGC = #{INLOGC}
+		    		<if test="INBONBU != ''">
+		       		AND B.MCI_BONBU = #{INBONBU}
+		    		</if>
+		   		    <if test="INCENTER != ''">
+		       		AND B.MCI_CENTER = #{INCENTER}
+		    		</if>
+		       	)
+			   	</if>
+			   	<if test="LOGC != '' or BONBU != '' or CENTER != ''">
+			   	AND 
+		       	(
+		           	DBM_CENTER is null or A.MCI_LOGC = #{LOGC}
+		    		<if test="BONBU != ''">
+		       		AND A.MCI_BONBU = #{BONBU}
+		    		</if>
+		   		    <if test="CENTER != ''">
+		       		AND A.MCI_CENTER = #{CENTER}
+		    		</if> 
+		       	) 
+			   	</if>
+			   	<if test="MNAME != ''">
+		        AND DBO_MODEL like '%${MNAME}%'
+		   		</if>
+		) A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getBonbuMOVEList2" resultType="com.vo.MoveVo" parameterType="hashmap">
+		SELECT rownum, DBO_DOCNO, DBO_MODEL, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+			   OUTBONBUNAME, OUTCENTERNAME, INBONBUNAME, INCENTERNAME, 
+			   DBO_DATE, DBM_DATE, DBO_CFMDATE, DBM_Sts, DBO_BisSts, totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY DBM_Sts, DBO_BisSts, DBO_DATE DESC, DBM_DATE DESC, DBO_CFMDATE DESC) AS rownum, 
+				   DBO_DOCNO, DBO_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+				   A.MCI_BonbuNAME AS OUTBONBUNAME, A.MCI_CenterName AS OUTCENTERNAME,
+				   B.MCI_BonbuNAME AS INBONBUNAME, B.MCI_CenterName AS INCENTERNAME,
+				   CONVERT(CHAR(10), DBO_DATE, 23) as DBO_DATE, 
+			       CONVERT(CHAR(10), DBM_DATE, 23) as DBM_DATE, 
+			       CONVERT(CHAR(10), DBO_CFMDATE, 23) as DBO_CFMDATE,
+			       DBM_Sts, DBO_BisSts,
+			       COUNT(*) OVER() AS totalCnt
+			  FROM DT_BONBU_MOVE
+		      	   left outer join MF_CENTER_INFO A on DBM_CENTER = A.MCI_CODE,
+		      	   DT_BONBU_ORDER
+		      	   left outer join MF_CENTER_INFO B on DBO_CENTER = B.MCI_CODE
+		      	   left outer join MF_MODEL_CODE on DBO_MODEL = MMC_CODE
+			       left outer join MF_COMM_CODE on MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+			 WHERE DBM_DOCNO = DBO_DOCNO
+			 	<if test="OutStartDay != '' or OutEndDay != ''">
+			 	AND 
+		       	(
+		           	DBM_DATE is null or
+		    		<if test="OutStartDay == '' and OutEndDay != ''">
+		       		DBM_DATE <![CDATA[<=]]> #{OutEndDay}
+		    		</if>
+		    		<if test="OutStartDay != '' and OutEndDay == ''">
+		       		DBM_DATE <![CDATA[>=]]> #{OutStartDay}
+		    		</if>
+		    		<if test="OutStartDay != '' and OutEndDay != ''">
+		       		DBM_DATE between #{OutStartDay} AND #{OutEndDay}
+		    		</if>
+		       	)
+			 	</if>
+			 	<if test="InStartDay != '' or InEndDay != ''">
+			 	AND 
+		       	(
+		           	DBO_CFMDATE is null or
+		    		<if test="InStartDay == '' and InEndDay != ''">
+		       		DBO_CFMDATE <![CDATA[<=]]> #{InEndDay}
+		    		</if>
+		    		<if test="InStartDay != '' and InEndDay == ''">
+		       		DBO_CFMDATE <![CDATA[>=]]> #{InStartDay}
+		    		</if>
+		    		<if test="InStartDay != '' and InEndDay != ''">
+		       		DBO_CFMDATE between #{InStartDay} AND #{InEndDay}
+		    		</if>
+		       	)
+			 	</if>
+			 	<if test="CTYPE != ''">
+			 	<if test="INLOGC != ''">
+		        AND B.MCI_LOGC = #{INLOGC}
+		       	</if>
+		    	<if test="INBONBU != ''">
+		       	AND B.MCI_BONBU = #{INBONBU}
+		    	</if>
+		   		<if test="INCENTER != ''">
+		       	AND B.MCI_CENTER = #{INCENTER}
+		    	</if>
+			   	<if test="LOGC != ''">
+		        AND A.MCI_LOGC = #{LOGC}
+		        </if>
+		    	<if test="BONBU != ''">
+		        AND A.MCI_BONBU = #{BONBU}
+		    	</if>
+		   		<if test="CENTER != ''">
+		       	AND A.MCI_CENTER = #{CENTER}
+		    	</if> 
+		    	</if>
+		    	<if test="CTYPE == ''">
+		        AND (
+		        	B.MCI_LOGC = #{INLOGC} 
+		        	AND B.MCI_BONBU = #{INBONBU}
+		        	<if test="INCENTER != ''">
+		        	AND B.MCI_CENTER = #{INCENTER} 
+		        	</if>
+		        	OR 
+		        	A.MCI_LOGC = #{INLOGC} 
+		        	AND A.MCI_BONBU = #{INBONBU} 
+		        	<if test="INCENTER != ''">
+		        	AND A.MCI_CENTER = #{INCENTER} 
+		        	</if>
+		        	)
+		       	</if>
+			   	<if test="MNAME != ''">
+		        AND DBO_MODEL like '%${MNAME}%'
+		   		</if>
+		) A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getBonbuMOVEInfo" resultType="com.vo.MoveVo" parameterType="String">
+		SELECT DBO_DOCNO, DBO_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+		 	   A.MCI_LOGC AS OUTLOGC, A.MCI_LOGCNAME AS OUTLOGCNAME, 
+			   A.MCI_Bonbu AS OUTBONBU, A.MCI_BonbuNAME AS OUTBONBUNAME, 
+			   A.MCI_Center AS OUTCENTER, A.MCI_CenterName AS OUTCENTERNAME,
+			   B.MCI_LOGC AS INLOGC, B.MCI_LOGCNAME AS INLOGCNAME, 
+			   B.MCI_BonbuNAME AS INBONBUNAME, B.MCI_CenterName AS INCENTERNAME,
+			   CONVERT(CHAR(10), DBO_DATE, 23) as DBO_DATE, 
+			   CONVERT(CHAR(10), DBM_DATE, 23) as DBM_DATE, 
+			   CONVERT(CHAR(10), DBO_CFMDATE, 23) as DBO_CFMDATE,
+			   DBM_Sts, DBO_BisSts, MUT_UserName, DBO_CMNT, 
+			   ISNULL(DBM_QTY,'0') as DBM_QTY, 
+			   ISNULL(DBO_QTY,'0') as DBO_QTY, 
+			   ISNULL(DMJ_JEGO,'0') as DMJ_JEGO,
+			   DBM_HOWMOVE, DBM_CMNT, DBM_CFM, DBM_CENTER, DBO_CENTER
+		  FROM DT_BONBU_MOVE
+		       left outer join MF_CENTER_INFO A on DBM_CENTER = A.MCI_CODE,
+		       MF_CENTER_INFO B, MF_MODEL_CODE, MF_COMM_CODE, MF_USER_TBL, DT_BONBU_ORDER
+			   left outer join DT_MODEL_JEGO on DBO_MODEL = DMJ_MODEL and DBO_CENTER = DMJ_CENTER
+		 WHERE DBM_DOCNO = DBO_DOCNO
+		   AND DBO_CENTER = B.MCI_CODE
+		   AND DBO_MODEL = MMC_CODE
+		   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+		   AND DBO_USER = MUT_UserID
+		   AND DBO_DOCNO = #{value}
+	</select>
+	<select id="getJegoModel" resultType="com.vo.MoveVo" parameterType="hashmap">
+	<choose>
+    <when test="NOWDATE != ''">
+	SELECT DMJ_MODEL, DMJ_CENTER, DMJ_JEGO, ISNULL(A.INQTY, 0) - ISNULL(B.OUTQTY, 0) as OUTJEGO 
+	  FROM DT_MODEL_JEGO
+	       left outer join (SELECT DIB_MODEL, DIB_CENTER, SUM(DIB_QTY) AS INQTY
+	                          FROM DT_INOUT_BONBU 
+	                         WHERE DIB_IOTYPE = '1' AND DIB_IODATE <![CDATA[<]]> dateadd(day,1,#{NOWDATE})
+	                         GROUP BY DIB_MODEL, DIB_CENTER
+	                        ) A on A.DIB_MODEL = DMJ_MODEL and A.DIB_CENTER = DMJ_CENTER
+	       left outer join (SELECT DIB_MODEL, DIB_CENTER, SUM(DIB_QTY) AS OUTQTY
+	                          FROM DT_INOUT_BONBU 
+	                         WHERE DIB_IOTYPE = '2' AND DIB_IODATE <![CDATA[<]]> dateadd(day,1,#{NOWDATE})
+	                         GROUP BY DIB_MODEL, DIB_CENTER
+	                        ) B on B.DIB_MODEL = DMJ_MODEL and B.DIB_CENTER = DMJ_CENTER
+     WHERE DMJ_MODEL = #{MODEL} 
+	   and DMJ_CENTER = #{CENTER}
+	</when>
+	<otherwise>
+	SELECT DMJ_JEGO, DMJ_JEGO as OUTJEGO
+	  FROM DT_MODEL_JEGO
+     WHERE DMJ_MODEL = #{MODEL} 
+	   and DMJ_CENTER = #{CENTER}
+	</otherwise>
+	</choose>
+	</select>
+	<update id="updateMoveCFM" parameterType="hashmap">
+	 	update DT_BONBU_MOVE 
+	       set DBM_CENTER = #{CENTER},
+	       	   DBM_DATE = #{OUTDATE},
+	       	   DBM_QTY = #{OUTQTY},
+	       	   DBM_HOWMOVE = #{HOWMOVE},
+	       	   DBM_CMNT = #{CMNT},
+	       	   DBM_CFM = 'Y',
+	       	   DBM_CFMUSER = #{USERID},
+	       	   DBM_CFMDATE = getdate(),
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{PROG},
+	       	   CMN_UPD_ID = #{USERID}
+	      FROM DT_BONBU_ORDER
+	     where DBM_DOCNO = #{DOCNO}
+	       AND DBO_DOCNO = DBM_DOCNO
+	       AND DBM_Sts = 'N'
+	</update>
+	<update id="updateMove" parameterType="com.vo.MoveVo">
+	 	update DT_BONBU_MOVE 
+	 	   set DBM_CENTER = #{DBM_CENTER},
+	 	       DBM_DATE = #{DBM_DATE},
+	 	       DBM_QTY = #{DBM_QTY},
+	           DBM_UESR = #{DBM_UESR},
+	       	   DBM_HOWMOVE = #{DBM_HOWMOVE},
+	       	   DBM_CMNT = #{DBM_CMNT},
+	       	   DBM_Sts = 'Y',
+	       	   <if test='DBM_CFM == "N"'>
+	       	   DBM_CFM = 'Y',
+	       	   DBM_CFMUSER = #{CMN_UPD_ID},
+	       	   DBM_CFMDATE = getdate(),
+	       	   </if>
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	      FROM DT_BONBU_ORDER
+	     where DBM_DOCNO = #{DBM_DOCNO}
+	       AND DBO_DOCNO = DBM_DOCNO
+	       AND DBM_Sts = 'N'
+	</update>
+	<update id="updateChulhaJego" parameterType="hashmap">
+		update DT_MODEL_JEGO
+		   set DMJ_JEGO = B.DMJ_JEGO + (#{JEGO}*(-1))
+		  FROM DT_MODEL_JEGO B
+		 WHERE DMJ_MODEL = B.DMJ_MODEL
+		   AND DMJ_CENTER = B.DMJ_CENTER
+		   AND DMJ_MODEL = #{MODEL}
+		   AND DMJ_CENTER = #{CENTER}
+		   AND DMJ_JEGO <![CDATA[>=]]> #{JEGO}
+	</update>
+	<update id="updateInLogcJego" parameterType="String">
+		MERGE INTO DT_MODEL_JEGO A
+		USING ( SELECT DIL_MODEL as MODEL, DBI_CENTER as CENTER, DBI_QTY FROM DT_IN_LOGC, DT_BONBU_IN WHERE DIL_DOCNO = DBI_TOPDOCNO AND DBI_DOCNO = #{value}) B ON(A.DMJ_MODEL = B.MODEL and A.DMJ_CENTER = B.CENTER )
+		WHEN MATCHED THEN
+		UPDATE SET DMJ_JEGO = DMJ_JEGO + B.DBI_QTY
+		WHEN NOT MATCHED THEN
+		INSERT (DMJ_MODEL, DMJ_CENTER, DMJ_JEGO) values (B.MODEL, B.CENTER, B.DBI_QTY);
+	</update>
+	<update id="updateInBonbuJego" parameterType="String">
+		MERGE INTO DT_MODEL_JEGO A
+		USING ( SELECT DBO_MODEL as MODEL, DBO_CENTER as CENTER, DBM_QTY FROM DT_BONBU_ORDER, DT_BONBU_MOVE WHERE DBO_DOCNO = DBM_DOCNO AND DBO_DOCNO = #{value}) B ON(A.DMJ_MODEL = B.MODEL and A.DMJ_CENTER = B.CENTER )
+		WHEN MATCHED THEN
+		UPDATE SET DMJ_JEGO = DMJ_JEGO + B.DBM_QTY
+		WHEN NOT MATCHED THEN
+		INSERT (DMJ_MODEL, DMJ_CENTER, DMJ_JEGO) values (B.MODEL, B.CENTER, B.DBM_QTY);
+	</update>
+	<select id="getInCFMList" resultType="com.vo.CfmVo" parameterType="hashmap">
+	    select rownum, INTYPE, DOCNO, INLOGC, INBONBU, INCENTER, INBONBU_NAME, INCENTER_NAME, OUT_BONBU,
+	           MODEL, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+	           INDATE, INQTY, OUTDATE, OUTQTY, DIC_DATE, CFMsts, totalCnt
+	      FROM (
+	      	select ROW_NUMBER() OVER(ORDER BY CFMsts, OUTDATE DESC, DOCNO) AS rownum, 
+		    	   DOCNO, INTYPE, INLOGC, INBONBU, INCENTER, 
+		    	   INBONBU_NAME, INCENTER_NAME, OUT_BONBU,
+		           MODEL, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+		           INDATE, INQTY, OUTDATE, OUTQTY, DIC_DATE, CFMsts,
+		           COUNT(*) OVER() AS totalCnt
+		      FROM (
+				select DBI_DOCNO as DOCNO, '0' AS INTYPE,
+				       B.MCI_LOGC as INLOGC, B.MCI_Bonbu as INBONBU, B.MCI_Center as INCENTER, 
+				       B.MCI_BonbuNAME as INBONBU_NAME, B.MCI_CenterName as INCENTER_NAME, 
+				       A.MCI_LOGCNAME as OUT_BONBU,
+					   DIL_MODEL as MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+					   '-' as INDATE, '0' as INQTY,
+					   CONVERT(CHAR(10), DIL_OUTDATE, 23) as OUTDATE, ISNULL(DBI_QTY,'0') as OUTQTY, 
+					   CONVERT(CHAR(10), DIC_DATE, 23) as DIC_DATE, 
+					   case when DIC_DOCNO is null then 'N' else 'Y' end as CFMsts
+				  FROM DT_IN_LOGC, MF_CENTER_INFO A, MF_CENTER_INFO B, MF_MODEL_CODE, MF_COMM_CODE, 
+				       DT_BONBU_IN
+				  	   left outer join DT_IN_CFM on DBI_DOCNO = DIC_DOCNO
+				 WHERE DIL_DOCNO = DBI_TOPDOCNO
+				   AND DIL_LOGC = A.MCI_LOGC AND A.MCI_BONBU = ' ' AND A.MCI_CENTER = ' '
+				   AND DIL_MODEL = MMC_CODE
+				   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+				   AND DBI_CENTER = B.MCI_CODE
+				  <if test="StartDay == '' and EndDay != ''">
+		           AND DIL_OUTDATE <![CDATA[<=]]> #{EndDay}
+		          </if>
+		          <if test="StartDay != '' and EndDay == ''">
+		           AND DIL_OUTDATE <![CDATA[>=]]> #{StartDay}
+		          </if>
+		          <if test="StartDay != '' and EndDay != ''">
+		           AND DIL_OUTDATE between #{StartDay} AND #{EndDay}
+		          </if>
+				 UNION ALL
+				select DBO_DOCNO AS DOCNO, '1' AS INTYPE,
+				       A.MCI_LOGC as INLOGC, A.MCI_Bonbu as INBONBU, A.MCI_Center as INCENTER, 
+				       A.MCI_BonbuNAME as INBONBU_NAME, A.MCI_CenterName as INCENTER_NAME, 
+				       B.MCI_BonbuNAME + ' ' + B.MCI_CenterName as OUT_BONBU,
+					   DBO_MODEL as MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+					   CONVERT(CHAR(10), DBO_DATE, 23) as INDATE, ISNULL(DBO_QTY,'0') as INQTY,
+					   CONVERT(CHAR(10), DBM_DATE, 23) as OUTDATE, ISNULL(DBM_QTY,'0') as OUTQTY,
+					   CONVERT(CHAR(10), DIC_DATE, 23) as DIC_DATE, 
+					   case when DIC_DOCNO is null then 'N' else 'Y' end as CFMsts
+				  FROM DT_BONBU_MOVE, MF_CENTER_INFO A, MF_CENTER_INFO B, MF_MODEL_CODE, MF_COMM_CODE, DT_BONBU_ORDER
+				       left outer join DT_IN_CFM on DBO_DOCNO = DIC_DOCNO
+				 WHERE DBM_DOCNO = DBO_DOCNO
+				   AND DBM_Sts = 'Y'
+				   AND DBO_CENTER = A.MCI_CODE
+				   AND DBO_MODEL = MMC_CODE
+				   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+				   AND DBM_CENTER = B.MCI_CODE
+				  <if test="StartDay == '' and EndDay != ''">
+		           AND DBM_DATE <![CDATA[<=]]> #{EndDay}
+		          </if>
+		          <if test="StartDay != '' and EndDay == ''">
+		           AND DBM_DATE <![CDATA[>=]]> #{StartDay}
+		          </if>
+		          <if test="StartDay != '' and EndDay != ''">
+		           AND DBM_DATE between #{StartDay} AND #{EndDay}
+		          </if>
+				) SUB
+		     WHERE 1=1
+		       <if test="LOGC != ''">
+		       AND INLOGC = #{LOGC}
+		       </if>
+		       <if test="BONBU != ''">
+		       AND INBONBU = #{BONBU}
+		       </if>
+		   	   <if test="CENTER != ''">
+		       AND INCENTER = #{CENTER}
+		       </if>
+		       <if test="MNAME != ''">
+		       AND MODEL like '%${MNAME}%'
+		   	   </if>
+		   	   <if test="INSTS != null and !INSTS.equals('')  ">
+		       AND INTYPE = #{INSTS}
+		   	   </if>
+		   	   <if test="CFMSTS != ''">
+		       AND CFMsts = #{CFMSTS}
+		   	   </if>
+	      ) MAS
+	      WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getInCFMLogcInfo" resultType="com.vo.CfmVo" parameterType="String">
+	    select DBI_DOCNO as DOCNO, A.MCI_LOGCNAME as OUT_BONBU,
+	           B.MCI_LOGC as INLOGC, B.MCI_Bonbu as INBONBU, B.MCI_Center as INCENTER, 
+			   B.MCI_BonbuNAME as INBONBU_NAME, B.MCI_CenterName as INCENTER_NAME, 
+			   DIL_MODEL as MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+			   CONVERT(CHAR(10), DIL_OUTDATE, 23) as OUTDATE, ISNULL(DBI_QTY,'0') as OUTQTY, 
+			   CONVERT(CHAR(10), DIC_DATE, 23) as DIC_DATE, 
+			   MUT_UserName as DIC_USERNAME, DIC_CMNT,
+			   case when DIC_DOCNO is null then 'N' else 'Y' end as CFMsts
+		  FROM DT_IN_LOGC, MF_CENTER_INFO A, MF_CENTER_INFO B, MF_MODEL_CODE, MF_COMM_CODE, DT_BONBU_IN
+			   left outer join DT_IN_CFM on DBI_DOCNO = DIC_DOCNO
+			   left outer join MF_USER_TBL on DIC_USER = MUT_UserID
+		 WHERE DIL_DOCNO = DBI_TOPDOCNO
+		   AND DIL_LOGC = A.MCI_LOGC AND A.MCI_BONBU = ' ' AND A.MCI_CENTER = ' '
+		   AND DIL_MODEL = MMC_CODE
+		   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+		   AND DBI_CENTER = B.MCI_CODE
+		   AND DBI_DOCNO = #{value}
+	</select>
+	<select id="getInCFMBonbuInfo" resultType="com.vo.CfmVo" parameterType="String">
+	    select DBO_DOCNO as DOCNO, B.MCI_BonbuNAME + ' ' + B.MCI_CenterName as OUT_BONBU,
+	           A.MCI_LOGC as INLOGC, A.MCI_Bonbu as INBONBU, A.MCI_Center as INCENTER, 
+			   A.MCI_BonbuNAME as INBONBU_NAME, A.MCI_CenterName as INCENTER_NAME, 
+			   DBO_MODEL as MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+			   CONVERT(CHAR(10), DBO_DATE, 23) as INDATE, ISNULL(DBO_QTY,'0') as INQTY, DBO_CMNT,
+			   CONVERT(CHAR(10), DBM_DATE, 23) as OUTDATE, ISNULL(DBM_QTY,'0') as OUTQTY, D.MUT_UserName as DBO_USERNAME,
+			   CONVERT(CHAR(10), DIC_DATE, 23) as DIC_DATE, C.MUT_UserName as DIC_USERNAME, DIC_CMNT,
+			   case when DIC_DOCNO is null then 'N' else 'Y' end as CFMsts
+		  FROM DT_BONBU_MOVE, MF_CENTER_INFO B, MF_CENTER_INFO A, MF_USER_TBL D, MF_MODEL_CODE, MF_COMM_CODE, DT_BONBU_ORDER
+			   left outer join DT_IN_CFM on DBO_DOCNO = DIC_DOCNO
+			   left outer join MF_USER_TBL C on DIC_USER = C.MUT_UserID
+		 WHERE DBM_DOCNO = DBO_DOCNO
+		   AND DBO_CENTER = A.MCI_CODE
+		   AND DBO_USER = D.MUT_UserID
+		   AND DBO_MODEL = MMC_CODE
+		   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+		   AND DBM_CENTER = B.MCI_CODE
+		   AND DBO_DOCNO = #{value}
+	</select>
+	
+	<insert id="insertCfm" parameterType="com.vo.CfmVo">
+		INSERT into DT_IN_CFM (DIC_DOCNO, DIC_USER, DIC_DATE, DIC_RESN, DIC_CMNT, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID) 
+		values (#{DIC_DOCNO}, #{DIC_USER}, #{DIC_DATE}, #{DIC_RESN}, #{DIC_CMNT}, 'N', getdate(), #{CMN_MAK_PROG}, #{CMN_MAK_ID}, getdate(), #{CMN_UPD_PROG}, #{CMN_UPD_ID})
+	</insert>
+	
+	<update id="updateCfm" parameterType="com.vo.CfmVo">
+		UPDATE DT_IN_CFM
+		   SET DIC_CMNT = #{DIC_CMNT},
+		       CMN_UPD_DATE = getdate(),
+		       CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     WHERE DIC_DOCNO = #{DIC_DOCNO}
+	</update>
+	
+	<insert id="insertCfmLogcInOut" parameterType="hashmap">
+	    insert into DT_INOUT_BONBU(DIB_DOCNO, DIB_MODEL, DIB_IOTYPE, DIB_IODATE, DIB_QTY, DIB_RESN, DIB_CENTER,
+	    						   CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	    SELECT DBI_DOCNO, DIL_MODEL, '1', DIC_DATE, DBI_QTY, '1', DBI_CENTER, 'N', getdate(), 'BonbuCfm_PASS', #{USERID}, getdate(), 'BonbuCfm_PASS', #{USERID}
+	      FROM DT_IN_LOGC, DT_BONBU_IN, DT_IN_CFM
+	     WHERE DIL_DOCNO = DBI_TOPDOCNO
+	       AND DBI_DOCNO = DIC_DOCNO
+	       AND DIL_OUTDATE <![CDATA[<=]]> DIC_DATE
+	       AND DBI_DOCNO = #{DOCNO}
+	</insert>
+	
+	<insert id="insertCfmBonbuInOut" parameterType="hashmap">
+	    insert into DT_INOUT_BONBU(DIB_DOCNO, DIB_MODEL, DIB_IOTYPE, DIB_IODATE, DIB_QTY, DIB_RESN, DIB_CENTER,
+	    						   CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	    SELECT DBO_DOCNO, DBO_MODEL, '1', DIC_DATE, DBM_QTY, '2', DBO_CENTER, 'N', getdate(), 'BonbuCfm_PASS', #{USERID}, getdate(), 'BonbuCfm_PASS', #{USERID}
+	      FROM DT_BONBU_ORDER, DT_BONBU_MOVE, DT_IN_CFM
+	     WHERE DBO_DOCNO = DBM_DOCNO
+	       AND DBO_DOCNO = DIC_DOCNO
+	       AND DBM_DATE <![CDATA[<=]]> DIC_DATE
+	       AND DBO_DOCNO = #{DOCNO}
+	</insert>
+	
+	<update id="updateOrderCfm" parameterType="String">
+	 	update DT_BONBU_ORDER 
+	       set DBO_BisSts = 'Y',
+	       	   DBO_CFMDATE = DIC_DATE,
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	      FROM DT_IN_CFM
+	     WHERE DBO_DOCNO = DIC_DOCNO
+	       and DBO_DOCNO = #{value}
+	</update>
+	
+	<update id="updateInBonbuCfm" parameterType="String">
+	 	update DT_BONBU_IN 
+	       set DBI_BisSts = 'Y',
+	       	   DBI_CFMDATE = DIC_DATE,
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	      FROM DT_IN_CFM
+	     WHERE DBI_DOCNO = DIC_DOCNO
+	       and DBI_DOCNO = #{value}
+	</update>
+	<select id="getOtherList" resultType="com.vo.OtherVo" parameterType="hashmap">
+		SELECT rownum, DOO_DOCNO, DOO_MODEL, DOO_CENTER, 
+			   MCI_BonbuNAME, MCI_CenterName,
+			   MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+			   DOO_DATE, DOO_QTY, DOO_OUTCMNT, DOO_CMNT, totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY DOO_DATE desc, DOO_CENTER ) AS rownum, 
+				   DOO_DOCNO, DOO_MODEL, DOO_CENTER,
+				   MCI_BonbuNAME, MCI_CenterName,
+			       MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+			       CONVERT(CHAR(10), DOO_DATE, 23) as DOO_DATE, 
+			       ISNULL(DOO_QTY,'0') as DOO_QTY, DOO_OUTCMNT, DOO_CMNT,
+			       COUNT(*) OVER() AS totalCnt
+		      FROM DT_Other_OUT, MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE
+		     WHERE DOO_CENTER = MCI_CODE
+		       AND DOO_MODEL = MMC_CODE
+		       AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+		    <if test="StartDay == '' and EndDay != ''">
+		       AND DOO_DATE <![CDATA[<=]]> #{EndDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay == ''">
+		       AND DOO_DATE <![CDATA[>=]]> #{StartDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay != ''">
+		       AND DOO_DATE between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != null and LOGC != ''">
+		       AND MCI_LOGC = #{LOGC}
+		    </if>
+		    <if test="BONBU != null and BONBU != ''">
+		       AND MCI_BONBU = #{BONBU}
+		    </if>
+		    <if test="CENTER != null and CENTER != ''">
+		       AND MCI_CENTER = #{CENTER}
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND DOO_MODEL like '%${MNAME}%'
+		    </if>
+		)A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getLastOtherDocNo" resultType="com.vo.OtherVo">
+		SELECT CONVERT(CHAR(8), GETDATE(), 112) as CMN_MAK_DATE, ISNULL(MAX(DOO_SEQ), 0) AS DOO_SEQ
+		  FROM DT_Other_OUT 
+		 WHERE convert(char(8), CMN_MAK_DATE , 112) = CONVERT(CHAR(8), GETDATE(), 112)
+	</select>
+	<insert id="insertOther" parameterType="com.vo.OtherVo">
+	    insert into DT_Other_OUT(DOO_DOCNO, DOO_SEQ, DOO_MODEL, DOO_CENTER, DOO_DATE, DOO_QTY, DOO_OUTCMNT, DOO_CMNT, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{DOO_DOCNO}, #{DOO_SEQ}, #{DOO_MODEL}, #{DOO_CENTER}, #{DOO_DATE}, #{DOO_QTY}, #{DOO_OUTCMNT}, #{DOO_CMNT}, 'N', getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	
+	<select id="getOtherInfo" resultType="com.vo.OtherVo" parameterType="String">
+		SELECT DOO_DOCNO, DOO_MODEL, DOO_CENTER,
+			   MCI_LOGCNAME, MCI_BonbuNAME, MCI_CenterName,
+			   MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+			   CONVERT(CHAR(10), DOO_DATE, 23) as DOO_DATE, 
+		       ISNULL(DOO_QTY,'0') as DOO_QTY, DOO_OUTCMNT, DOO_CMNT,
+		       ISNULL(DMJ_JEGO,'0') as DMJ_JEGO
+		  FROM MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE, DT_Other_OUT
+			   left outer join DT_MODEL_JEGO on DOO_MODEL = DMJ_MODEL and DOO_CENTER = DMJ_CENTER
+		 WHERE DOO_DOCNO = #{value}
+		   AND DOO_CENTER = MCI_CODE
+		   AND DOO_MODEL = MMC_CODE
+		   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+	</select>
+	<select id="getInoutReportCenter" resultType="com.vo.InoutReportVo" parameterType="hashmap">
+		SELECT DIB_IOTYPE, DIB_CENTER, DATEPART(mm, DIB_IODATE) as MONTH, DIB_RESN, SUM(DIB_QTY) as CNT
+		  FROM DT_INOUT_BONBU, MF_CENTER_INFO
+		 WHERE DIB_MODEL = #{MODEL}
+		   AND DIB_IODATE BETWEEN #{StartDay} AND #{EndDay}
+		   <if test="INOUT_TYPE == 1">
+		   AND DIB_IOTYPE = '1'
+		   AND (DIB_RESN = '1' or DIB_RESN = '2')
+		   </if>
+		   <if test="INOUT_TYPE == 2">
+		   AND DIB_IOTYPE = '2'
+		   </if>
+		   AND DIB_CENTER = MCI_CODE
+	     <choose>
+	     <when test="LEVEL == '001' or LEVEL == '002'">
+           AND MCI_LOGC = #{LOGC}
+           AND not MCI_Bonbu = ' '
+	       AND not MCI_Center = ' '
+	     </when>
+	     <when test="LEVEL == '003'">
+           AND MCI_LOGC = #{LOGC}
+	       AND MCI_Bonbu = #{BONBU}
+	       AND not MCI_Center = ' '
+    	 </when>
+	     <otherwise>
+	       AND MCI_LOGC = #{LOGC}
+	       AND MCI_Bonbu = #{BONBU}
+	       AND MCI_Center = #{CENTER}
+	     </otherwise>
+	     </choose>
+	     group by DIB_IOTYPE, DIB_CENTER, DATEPART(mm, DIB_IODATE), DIB_RESN
+		 order by DIB_IOTYPE, DIB_CENTER, DATEPART(mm, DIB_IODATE), DIB_RESN
+	</select>
+	<select id="getJegoModelReport" resultType="com.vo.InoutReportVo" parameterType="hashmap">
+	SELECT DMJ_MODEL, DMJ_CENTER, DMJ_JEGO + ISNULL(SUM(case WHEN DIB_IOTYPE = '1' THEN DIB_QTY * (-1) else DIB_QTY end), 0) as JEGO
+	  FROM MF_CENTER_INFO, DT_MODEL_JEGO
+	  	   left outer join DT_INOUT_BONBU on DMJ_CENTER = DIB_CENTER and DMJ_MODEL = DIB_MODEL and DIB_IODATE > dateadd(year,-1,#{EndDay})
+     WHERE DMJ_MODEL = #{MODEL}
+       AND DMJ_CENTER = MCI_CODE
+	 <choose>
+	 <when test="LEVEL == '001' or LEVEL == '002'">
+       AND MCI_LOGC = #{LOGC}
+       AND not MCI_Bonbu = ' '
+	   AND not MCI_Center = ' '
+	 </when>
+	 <when test="LEVEL == '003'">
+       AND MCI_LOGC = #{LOGC}
+	   AND MCI_Bonbu = #{BONBU}
+	   AND not MCI_Center = ' '
+	 </when>
+	 <otherwise>
+	   AND MCI_LOGC = #{LOGC}
+	   AND MCI_Bonbu = #{BONBU}
+	   AND MCI_Center = #{CENTER}
+	 </otherwise>
+	 </choose>
+	 group by DMJ_MODEL, DMJ_CENTER, DMJ_JEGO
+	</select>
+	<select id="getNowJegoReport" resultType="com.vo.JegoVo" parameterType="hashmap">
+	SELECT LOGC, LOGCNAME, BONBU, BONBUNAME, CENTER, CENTERNAME, MCI_CODE, PJEGO, NOWJEGO, MMJ_JEGO,
+	       PJEGO + SUM(CASE WHEN MMDATE = '1' THEN DIB_QTY else 0 end) M1JEGO,
+	       <if test="MONTH gte 2">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '2' THEN DIB_QTY else 0 end) M2JEGO,
+	       </if>
+	       <if test="MONTH gte 3">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '3' THEN DIB_QTY else 0 end) M3JEGO,
+	       </if>
+	       <if test="MONTH gte 4">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '4' THEN DIB_QTY else 0 end) M4JEGO,
+	       </if>
+	       <if test="MONTH gte 5">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '5' THEN DIB_QTY else 0 end) M5JEGO,
+	       </if>
+	       <if test="MONTH gte 6">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '6' THEN DIB_QTY else 0 end) M6JEGO,
+	       </if>
+	       <if test="MONTH gte 7">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '7' THEN DIB_QTY else 0 end) M7JEGO,
+	       </if>
+	       <if test="MONTH gte 8">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '8' THEN DIB_QTY else 0 end) M8JEGO,
+	       </if>
+	       <if test="MONTH gte 9">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '9' THEN DIB_QTY else 0 end) M9JEGO,
+	       </if>
+	       <if test="MONTH gte 10">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '10' THEN DIB_QTY else 0 end) M10JEGO,
+	       </if>
+	       <if test="MONTH gte 11">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '11' THEN DIB_QTY else 0 end) M11JEGO,
+	       </if>
+	       <if test="MONTH gte 12">
+	       PJEGO + SUM(CASE WHEN MMDATE <![CDATA[<=]]> '12' THEN DIB_QTY else 0 end) M12JEGO,
+	       </if>
+	       ''
+	  FROM (
+	  		SELECT MCI_LOGC as LOGC, MCI_LOGCNAME as LOGCNAME, MCI_Bonbu as BONBU, MCI_BonbuNAME as BONBUNAME, MCI_Center as CENTER, MCI_CenterName as CENTERNAME, MCI_CODE, 
+	  		       ISNULL(DMJ_JEGO, 0) + ISNULL(P.JEGO, 0) as PJEGO, ISNULL(DMJ_JEGO,0) + ISNULL(N.JEGO,0) as NOWJEGO, ISNULL(MMJ_JEGO,0) as MMJ_JEGO, 
+	  		       DIB_IODATE, DATEPART(mm, DIB_IODATE) MMDATE, CASE WHEN DIB_IOTYPE = '2' THEN DIB_QTY*(-1) else DIB_QTY end DIB_QTY
+	  		  FROM MF_CENTER_INFO
+	  		       left outer join DT_INOUT_BONBU A on DIB_MODEL = #{MODEL} AND MCI_CODE = A.DIB_CENTER  AND DIB_IODATE BETWEEN #{StartDay} AND #{EndDay}
+	  		       left outer join MF_MODEL_JEGO on MMJ_CENTER = MCI_CODE and MMJ_MODEL = #{MODEL}
+	       		   left outer join DT_MODEL_JEGO on DMJ_CENTER = MCI_CODE and DMJ_MODEL = #{MODEL}
+	       		   left outer join 
+	       		   (
+		               SELECT DIB_CENTER, ISNULL(SUM(case WHEN DIB_IOTYPE = '1' THEN DIB_QTY * (-1) else DIB_QTY end), 0) as JEGO 
+		                 FROM DT_INOUT_BONBU
+		                WHERE DIB_MODEL = #{MODEL}
+		                  and DIB_IODATE > #{pDay}
+		                group by DIB_CENTER
+	               ) P
+		           on DMJ_CENTER = P.DIB_CENTER
+		           left outer join 
+		           (
+		   	           SELECT DIB_CENTER, ISNULL(SUM(case WHEN DIB_IOTYPE = '1' THEN DIB_QTY * (-1) else DIB_QTY end), 0) as JEGO 
+		                 FROM DT_INOUT_BONBU
+		                WHERE DIB_MODEL = #{MODEL}
+		                  and DIB_IODATE > #{NowDay}
+		                group by DIB_CENTER
+		           ) N
+		           on DMJ_CENTER = N.DIB_CENTER
+     		<choose>
+	 		<when test="LEVEL == '001' or LEVEL == '002'">
+             WHERE MCI_LOGC = #{LOGC}
+	           AND not MCI_Bonbu = ' '
+	           AND not MCI_Center = ' '
+	 		</when>
+	 		<when test="LEVEL == '003'">
+     		 WHERE MCI_LOGC = #{LOGC}
+	   		   AND MCI_Bonbu = #{BONBU}
+	   		   AND not MCI_Center = ' '
+	 		</when>
+	 		<otherwise>
+	 		 WHERE MCI_LOGC = #{LOGC}
+	   		   AND MCI_Bonbu = #{BONBU}
+	   		   AND MCI_Center = #{CENTER}
+	 		</otherwise>
+	 		</choose>
+	 	) MAIN
+	 	GROUP BY LOGC, LOGCNAME, BONBU, BONBUNAME, CENTER, CENTERNAME, MCI_CODE, PJEGO, NOWJEGO, MMJ_JEGO
+        ORDER BY LOGC, BONBU, CENTER
+	</select>
+	<select id="getInOutListReport" resultType="com.vo.InOutListVo" parameterType="hashmap">
+		SELECT rownum, DOCNO, MODEL, IOTYPE, IODATE, QTY, RESNNAME, CCODE,
+			   MCI_LOGC, LOGCNAME, BONBUNAME, CENTERNAME,
+			   MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY IODATE, CMN_MAK_DATE, MCI_LOGC, CCODE) AS rownum,
+			       DOCNO, MODEL, IOTYPE, IODATE, QTY, RESNNAME, CCODE, 
+			       MCI_LOGC, LOGCNAME, BONBUNAME, CENTERNAME, 
+			       MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+			       COUNT(*) OVER() AS totalCnt
+			  FROM (
+			<if test="BONBU == '' and CENTER == '' and ( IOTYPE == 0 or IOTYPE == 1 )">
+		    SELECT DIL_DOCNO as DOCNO, DIL_MODEL as MODEL, '1' as IOTYPE, CONVERT(CHAR(10), DIL_INDate, 23) as IODATE, 
+		    	   ISNULL(DIL_QTY,'0') as QTY, '물류입고' as RESNNAME,
+		    	   '0' as CCODE, MCI_LOGC, MCI_LOGCNAME as LOGCNAME, '-' as BONBUNAME, '-' as CENTERNAME,
+		    	   MMC_LGROUP, A.MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, DT_IN_LOGC.CMN_UPD_DATE AS CMN_MAK_DATE
+		      FROM DT_IN_LOGC, MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE A
+		     WHERE DIL_LOGC = MCI_LOGC AND MCI_Bonbu = ' ' AND MCI_Center = ' '
+		       AND DIL_MODEL = MMC_CODE
+		       AND A.MCC_L_CODE = '200' AND A.MCC_M_CODE = '201' AND MMC_LGROUP = A.MCC_S_CODE
+		    <if test="StartDay == '' and EndDay != ''">
+		       AND DIL_INDate <![CDATA[<=]]> #{EndDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay == ''">
+		       AND DIL_INDate <![CDATA[>=]]> #{StartDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay != ''">
+		       AND DIL_INDate between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != null and LOGC != ''">
+		       AND DIL_LOGC = #{LOGC}
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND DIL_MODEL like '%${MNAME}%'
+		    </if>
+		     UNION ALL 
+		    </if>
+			SELECT DIB_DOCNO as DOCNO, DIB_MODEL as MODEL, DIB_IOTYPE as IOTYPE, CONVERT(CHAR(10), DIB_IODATE, 23) as IODATE, 
+				   ISNULL(DIB_QTY,'0') as QTY, case when DIB_IOTYPE = '1' then B.MCC_S_NAME ELSE C.MCC_S_NAME end as RESNNAME, 
+				   MCI_CODE as CCODE, MCI_LOGC, MCI_LOGCNAME as LOGCNAME, MCI_BonbuNAME as BONBUNAME, MCI_CenterName as CENTERNAME,
+			       MMC_LGROUP, A.MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, DT_INOUT_BONBU.CMN_MAK_DATE AS CMN_MAK_DATE
+		      FROM DT_INOUT_BONBU 
+		           LEFT OUTER JOIN MF_COMM_CODE B ON DIB_IOTYPE = '1' AND B.MCC_L_CODE = '100' AND B.MCC_M_CODE = '100' AND DIB_RESN = B.MCC_S_CODE
+		           LEFT OUTER JOIN MF_COMM_CODE C ON DIB_IOTYPE = '2' AND C.MCC_L_CODE = '100' AND C.MCC_M_CODE = '101' AND DIB_RESN = C.MCC_S_CODE,
+		           MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE A
+		     WHERE DIB_CENTER = MCI_CODE
+		       AND DIB_MODEL = MMC_CODE
+		       AND A.MCC_L_CODE = '200' AND A.MCC_M_CODE = '201' AND MMC_LGROUP = A.MCC_S_CODE
+		    <if test="StartDay == '' and EndDay != ''">
+		       AND DIB_IODATE <![CDATA[<=]]> #{EndDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay == ''">
+		       AND DIB_IODATE <![CDATA[>=]]> #{StartDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay != ''">
+		       AND DIB_IODATE between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != null and LOGC != ''">
+		       AND MCI_LOGC = #{LOGC}
+		    </if>
+		    <if test="BONBU != null and BONBU != ''">
+		       AND MCI_BONBU = #{BONBU}
+		    </if>
+		    <if test="CENTER != null and CENTER != ''">
+		       AND MCI_CENTER = #{CENTER}
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND DIB_MODEL like '%${MNAME}%'
+		    </if>
+		    <if test="IOTYPE != 0">
+		       AND DIB_IOTYPE = #{IOTYPE}
+		    </if>
+		    <if test="EVENT != null and EVENT != ''">
+		       AND DIB_DOCNO like '%${EVENT}%'
+		       AND (DIB_IOTYPE = '1' AND DIB_RESN = '3' or DIB_IOTYPE = '2' AND DIB_RESN = '1')
+		    </if>
+		    ) SUB
+		) MAIN
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getInOutListReport_Excel" resultType="com.vo.InOutListVo" parameterType="hashmap">
+		SELECT DOCNO, MODEL, IOTYPE, IODATE, QTY, RESNNAME, CCODE, 
+			   MCI_LOGC, LOGCNAME, BONBUNAME, CENTERNAME, 
+			   MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP
+	      FROM (
+	        <if test="BONBU == '' and CENTER == '' and ( IOTYPE == 0 or IOTYPE == 1 )">
+		    SELECT DIL_DOCNO as DOCNO, DIL_MODEL as MODEL, '1' as IOTYPE, CONVERT(CHAR(10), DIL_INDate, 23) as IODATE, 
+		    	   ISNULL(DIL_QTY,'0') as QTY, '물류입고' as RESNNAME,
+		    	   '0' as CCODE, MCI_LOGC, MCI_LOGCNAME as LOGCNAME, '-' as BONBUNAME, '-' as CENTERNAME,
+		    	   MMC_LGROUP, A.MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, DT_IN_LOGC.CMN_UPD_DATE AS CMN_MAK_DATE
+		      FROM DT_IN_LOGC, MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE A
+		     WHERE DIL_LOGC = MCI_LOGC AND MCI_Bonbu = ' ' AND MCI_Center = ' '
+		       AND DIL_MODEL = MMC_CODE
+		       AND A.MCC_L_CODE = '200' AND A.MCC_M_CODE = '201' AND MMC_LGROUP = A.MCC_S_CODE
+		    <if test="StartDay == '' and EndDay != ''">
+		       AND DIL_INDate <![CDATA[<=]]> #{EndDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay == ''">
+		       AND DIL_INDate <![CDATA[>=]]> #{StartDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay != ''">
+		       AND DIL_INDate between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != null and LOGC != ''">
+		       AND DIL_LOGC = #{LOGC}
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND DIL_MODEL like '%${MNAME}%'
+		    </if>
+		     UNION ALL 
+		    </if>
+			SELECT DIB_DOCNO as DOCNO, DIB_MODEL as MODEL, DIB_IOTYPE as IOTYPE, CONVERT(CHAR(10), DIB_IODATE, 23) as IODATE, 
+				   ISNULL(DIB_QTY,'0') as QTY, case when DIB_IOTYPE = '1' then B.MCC_S_NAME ELSE C.MCC_S_NAME end as RESNNAME, 
+				   MCI_CODE as CCODE, MCI_LOGC, MCI_LOGCNAME as LOGCNAME, MCI_BonbuNAME as BONBUNAME, MCI_CenterName as CENTERNAME,
+			       MMC_LGROUP, A.MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, DT_INOUT_BONBU.CMN_MAK_DATE AS CMN_MAK_DATE
+		      FROM DT_INOUT_BONBU 
+		           LEFT OUTER JOIN MF_COMM_CODE B ON DIB_IOTYPE = '1' AND B.MCC_L_CODE = '100' AND B.MCC_M_CODE = '100' AND DIB_RESN = B.MCC_S_CODE
+		           LEFT OUTER JOIN MF_COMM_CODE C ON DIB_IOTYPE = '2' AND C.MCC_L_CODE = '100' AND C.MCC_M_CODE = '101' AND DIB_RESN = C.MCC_S_CODE,
+		           MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE A
+		     WHERE DIB_CENTER = MCI_CODE
+		       AND DIB_MODEL = MMC_CODE
+		       AND A.MCC_L_CODE = '200' AND A.MCC_M_CODE = '201' AND MMC_LGROUP = A.MCC_S_CODE
+		    <if test="StartDay == '' and EndDay != ''">
+		       AND DIB_IODATE <![CDATA[<=]]> #{EndDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay == ''">
+		       AND DIB_IODATE <![CDATA[>=]]> #{StartDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay != ''">
+		       AND DIB_IODATE between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != null and LOGC != ''">
+		       AND MCI_LOGC = #{LOGC}
+		    </if>
+		    <if test="BONBU != null and BONBU != ''">
+		       AND MCI_BONBU = #{BONBU}
+		    </if>
+		    <if test="CENTER != null and CENTER != ''">
+		       AND MCI_CENTER = #{CENTER}
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND DIB_MODEL like '%${MNAME}%'
+		    </if>
+		    <if test="IOTYPE != 0">
+		       AND DIB_IOTYPE = #{IOTYPE}
+		    </if>
+		    <if test="EVENT != null and EVENT != ''">
+		       AND DIB_DOCNO like '%${EVENT}%'
+		       AND (DIB_IOTYPE = '1' AND DIB_RESN = '3' or DIB_IOTYPE = '2' AND DIB_RESN = '1')
+		    </if>
+		) SUB
+		ORDER BY IODATE, CMN_MAK_DATE, MCI_LOGC, CCODE
+	</select>
+	<select id="getBonbuStatusReport" resultType="com.vo.BonbuStatusVo" parameterType="hashmap">
+	  SELECT rownum, MMC_CODE, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+			   MMJ_JEGO, PJEGO, (PJEGO - OUTJEGO) + INJEGO as NOWJEGO, INJEGO, OUTJEGO, totalCnt
+		FROM
+		(
+	      SELECT ROW_NUMBER() OVER(ORDER BY MMC_CODE) AS rownum,
+	             MMC_CODE, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+	             ISNULL(MMJ_JEGO, 0) as MMJ_JEGO,
+                 ISNULL(C.INQTY, 0) - ISNULL(D.OUTQTY, 0) as PJEGO,
+	             ISNULL(SUM(case WHEN DIB_IOTYPE = '1' THEN DIB_QTY else 0 end), 0) as INJEGO,
+	             ISNULL(SUM(case WHEN DIB_IOTYPE = '2'  THEN DIB_QTY else 0 end), 0) as OUTJEGO,
+	             COUNT(*) OVER() AS totalCnt
+            FROM MF_COMM_CODE, MF_MODEL_CODE
+                 left outer join DT_INOUT_BONBU on MMC_CODE = DIB_MODEL and DIB_CENTER = #{CENTER} AND DIB_IODATE between #{StartDay} and #{EndDay}
+                 left outer join MF_MODEL_JEGO on MMC_CODE = MMJ_MODEL AND MMJ_CENTER = #{CENTER}
+	             left outer join (SELECT DIB_MODEL, DIB_CENTER, SUM(DIB_QTY) AS INQTY
+	                                FROM DT_INOUT_BONBU 
+	                               WHERE DIB_IOTYPE = '1' AND DIB_IODATE <![CDATA[<]]> dateadd(day,1,#{PDATE})
+	                                 AND DIB_CENTER = #{CENTER}
+	                               GROUP BY DIB_MODEL, DIB_CENTER
+	             ) C on C.DIB_MODEL = MMC_CODE
+	             left outer join (SELECT DIB_MODEL, DIB_CENTER, SUM(DIB_QTY) AS OUTQTY
+	                                FROM DT_INOUT_BONBU 
+	                               WHERE DIB_IOTYPE = '2' AND DIB_IODATE <![CDATA[<]]> dateadd(day,1,#{PDATE})
+	                                 AND DIB_CENTER = #{CENTER}
+	                               GROUP BY DIB_MODEL, DIB_CENTER
+	             ) D on D.DIB_MODEL = MMC_CODE
+           where MMC_LOGC = #{LOGC}
+             AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+		    <if test="LCODE != null and LCODE != ''">
+		       AND MMC_LGROUP = #{LCODE}
+		    </if>
+		    <if test="MCODE != null and MCODE != ''">
+		       AND MMC_MGROUP = #{MCODE}
+		    </if>
+		    <if test="SCODE != null and SCODE != ''">
+		       AND MMC_SGROUP = #{SCODE}
+		    </if>
+		    <if test="MCODENAME != null and MCODENAME != ''">
+		       AND MMC_MGROUP like '%${MCODENAME}%'
+		    </if>
+		    <if test="SCODENAME != null and SCODENAME != ''">
+		       AND MMC_SGROUP like '%${SCODENAME}%'
+		    </if>
+		    <if test="MNAME != null and MNAME != ''">
+		       AND MMC_CODE like '%${MNAME}%'
+		    </if>
+	       group by MMC_CODE, MMC_LGROUP, MCC_S_NAME, MMC_MGROUP, MMC_SGROUP, MMJ_JEGO, C.INQTY, D.OUTQTY
+	    ) MAIN
+	    <if test="PTYPE == 1">
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+		</if>
+	</select>
+	<select id="getAndroidInCFMList" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+	   select DOCNO, INTYPE, INBONBU, OUTBONBU, MODEL, OUTDATE, CFMsts,
+	          MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP
+		 FROM (
+				select DBI_DOCNO as DOCNO, '0' AS INTYPE,
+				       B.MCI_BonbuNAME + ' ' + B.MCI_CenterName as INBONBU,
+				       A.MCI_LOGCNAME as OUTBONBU,
+					   DIL_MODEL as MODEL,
+					   MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+					   CONVERT(CHAR(10), DIL_OUTDATE, 23) as OUTDATE,
+					   case when DIC_DOCNO is null then 'N' else 'Y' end as CFMsts
+				  FROM DT_IN_LOGC, MF_CENTER_INFO A, MF_CENTER_INFO B, MF_MODEL_CODE, MF_COMM_CODE,
+				       DT_BONBU_IN
+				  	   left outer join DT_IN_CFM on DBI_DOCNO = DIC_DOCNO
+				 WHERE DIL_DOCNO = DBI_TOPDOCNO
+				   AND DIL_LOGC = A.MCI_LOGC AND A.MCI_BONBU = ' ' AND A.MCI_CENTER = ' '
+				   AND DIL_MODEL = MMC_CODE
+				   AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+				   AND DBI_CENTER = B.MCI_CODE
+				 <if test="StartDay == '' and EndDay != ''">
+		    	   AND DIL_OUTDATE <![CDATA[<=]]> #{EndDay}
+		   		   </if>
+		   		   <if test="StartDay != '' and EndDay == ''">
+		    	   AND DIL_OUTDATE <![CDATA[>=]]> #{StartDay}
+		   		   </if>
+		   		   <if test="StartDay != '' and EndDay != ''">
+		    	   AND DIL_OUTDATE between #{StartDay} AND #{EndDay}
+		   		   </if>
+		   		   <if test="LOGC != ''">
+		    	   AND B.MCI_LOGC = #{LOGC}
+		   		   </if>
+		   		   <if test="BONBU != ''">
+		    	   AND B.MCI_Bonbu = #{BONBU}
+		   		   </if>
+		   		   <if test="CENTER != ''">
+		    	   AND B.MCI_Center = #{CENTER}
+		   		   </if>
+				 UNION ALL
+				select DBO_DOCNO AS DOCNO, '1' AS INTYPE,
+				       A.MCI_BonbuNAME + ' ' + A.MCI_CenterName as INBONBU, 
+				       B.MCI_BonbuNAME + ' ' + B.MCI_CenterName as OUTBONBU,
+					   DBO_MODEL as MODEL,
+					   MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, 
+					   CONVERT(CHAR(10), DBM_DATE, 23) as OUTDATE,
+					   case when DIC_DOCNO is null then 'N' else 'Y' end as CFMsts
+				  FROM DT_BONBU_ORDER
+			 	       left outer join MF_CENTER_INFO A on DBO_CENTER = A.MCI_CODE
+				       left outer join DT_IN_CFM on DBO_DOCNO = DIC_DOCNO
+				       left outer join MF_MODEL_CODE on DBO_MODEL = MMC_CODE
+					   left outer join MF_COMM_CODE on MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE,
+			 	       DT_BONBU_MOVE
+			 	       left outer join MF_CENTER_INFO B on DBM_CENTER = B.MCI_CODE
+				 WHERE DBM_DOCNO = DBO_DOCNO
+				   AND DBM_Sts = 'Y'
+				   <if test="StartDay == '' and EndDay != ''">
+		    	   AND DBM_DATE <![CDATA[<=]]> #{EndDay}
+		   		   </if>
+		   		   <if test="StartDay != '' and EndDay == ''">
+		    	   AND DBM_DATE <![CDATA[>=]]> #{StartDay}
+		   		   </if>
+		   		   <if test="StartDay != '' and EndDay != ''">
+		    	   AND DBM_DATE between #{StartDay} AND #{EndDay}
+		   		   </if>
+		   		   <if test="LOGC != ''">
+		    	   AND A.MCI_LOGC = #{LOGC}
+		   		   </if>
+		   		   <if test="BONBU != ''">
+		    	   AND A.MCI_Bonbu = #{BONBU}
+		   		   </if>
+		   		   <if test="CENTER != ''">
+		    	   AND A.MCI_Center = #{CENTER}
+		   		   </if>
+			) SUB
+		    WHERE 1=1
+		   <if test="CFMSTS != ''">
+		    AND CFMsts = #{CFMSTS}
+		   </if>
+	 ORDER BY CFMsts, OUTDATE DESC, DOCNO
+	</select>
+	<select id="getAndroidEventList" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+	   select DEO_DOCNO, DEO_CENTER, DEO_USER, CONVERT(CHAR(10), DEO_DATE, 23) as DEO_DATE, DEO_CMNT, MUT_UserName,
+	          MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName
+		 FROM DT_EVENT_OUT, MF_USER_TBL, MF_CENTER_INFO
+		WHERE DEO_USER = MUT_UserID
+		  AND DEO_CENTER = MCI_CODE
+	    <if test="StartDay == '' and EndDay != ''">
+		  AND DEO_DATE <![CDATA[<=]]> #{EndDay}
+		</if>
+		<if test="StartDay != '' and EndDay == ''">
+		  AND DEO_DATE <![CDATA[>=]]> #{StartDay}
+		</if>
+		<if test="StartDay != '' and EndDay != ''">
+		  AND DEO_DATE between #{StartDay} AND #{EndDay}
+		</if>
+		<if test="LOGC != ''">
+		  AND MCI_LOGC = #{LOGC}
+		</if>
+		<if test="BONBU != ''">
+		  AND MCI_Bonbu = #{BONBU}
+		</if>
+		<if test="CENTER != ''">
+		  AND MCI_Center = #{CENTER}
+	    </if>
+	    <if test="EVENTNO != ''">
+		  AND DEO_DOCNO like '%${EVENTNO}%'
+	    </if>
+	    ORDER BY DEO_USER desc, DEO_CENTER
+	</select>
+	<select id="getAndroidJegoModel" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+	 SELECT DMJ_MODEL, DMJ_CENTER, DMJ_JEGO, ISNULL(A.INQTY, 0) - ISNULL(B.OUTQTY, 0) as OUTJEGO,
+	        MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, MMC_KINDS
+	   FROM MF_MODEL_CODE, MF_COMM_CODE, DT_MODEL_JEGO
+	        left outer join (SELECT DIB_MODEL, DIB_CENTER, SUM(DIB_QTY) AS INQTY
+	                           FROM DT_INOUT_BONBU 
+	                          WHERE DIB_IOTYPE = '1' AND DIB_IODATE <![CDATA[<]]> dateadd(day,1,#{NOWDATE})
+	                          GROUP BY DIB_MODEL, DIB_CENTER
+	                        ) A on A.DIB_MODEL = DMJ_MODEL and A.DIB_CENTER = DMJ_CENTER
+	        left outer join (SELECT DIB_MODEL, DIB_CENTER, SUM(DIB_QTY) AS OUTQTY
+	                          FROM DT_INOUT_BONBU 
+	                         WHERE DIB_IOTYPE = '2' AND DIB_IODATE <![CDATA[<]]> dateadd(day,1,#{NOWDATE})
+	                         GROUP BY DIB_MODEL, DIB_CENTER
+	                        ) B on B.DIB_MODEL = DMJ_MODEL and B.DIB_CENTER = DMJ_CENTER
+      WHERE DMJ_MODEL = #{MODEL} 
+	    and DMJ_CENTER = #{CENTER}
+	    and DMJ_MODEL = MMC_CODE
+	    and MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+	</select>
+	<insert id="insertEVENT" parameterType="com.vo.EventVo">
+	    insert into DT_EVENT_OUT(DEO_DOCNO, DEO_CENTER, DEO_USER, DEO_DATE, DEO_CMNT, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{DEO_DOCNO}, #{DEO_CENTER}, #{DEO_USER}, #{DEO_DATE}, #{DEO_CMNT}, 'N', getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<insert id="insertEVENTMODEL" parameterType="com.vo.EventModelVo">
+	    insert into DT_EVENT_MODEL(DEM_DOCNO, DEM_CENTER, DEM_MODEL, DEM_DATE, DEM_USER, DEM_STS, DEM_QTY, DEM_RETEMPDATE, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{DEM_DOCNO}, #{DEM_CENTER}, #{DEM_MODEL}, #{DEM_DATE}, #{DEM_USER}, #{DEM_STS}, #{DEM_QTY}, #{DEM_RETEMPDATE}, 'N', getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<update id="updateEVENT" parameterType="com.vo.EventVo">
+	    update DT_EVENT_OUT set DEO_CMNT = #{DEO_CMNT},
+	                            CMN_UPD_DATE = getdate(),
+	                            CMN_UPD_PROG = #{CMN_UPD_PROG},
+	                            CMN_UPD_ID = #{CMN_UPD_ID}
+	     where DEO_DOCNO = #{DEO_DOCNO}
+	</update>
+	<update id="updateEVENTMODEL" parameterType="com.vo.EventModelVo">
+		update DT_EVENT_MODEL set DEM_QTY = #{DEM_QTY},
+								  DEM_DATE = #{DEM_DATE},
+								  DEM_USER = #{DEM_USER},
+	                              CMN_UPD_DATE = getdate(),
+	                              CMN_UPD_PROG = #{CMN_UPD_PROG},
+	                              CMN_UPD_ID = #{CMN_UPD_ID}
+	     where DEM_DOCNO = #{DEM_DOCNO}
+	       AND DEM_CENTER =  #{DEM_CENTER}
+	       AND DEM_MODEL =  #{DEM_MODEL}
+	</update>
+	<update id="updateEVENTMODEL_REDATE" parameterType="com.vo.EventModelVo">
+		update DT_EVENT_MODEL set DEM_RETEMPDATE = #{DEM_RETEMPDATE},
+	                              CMN_UPD_DATE = getdate(),
+	                              CMN_UPD_PROG = #{CMN_UPD_PROG},
+	                              CMN_UPD_ID = #{CMN_UPD_ID}
+	     where DEM_DOCNO = #{DEM_DOCNO}
+	       AND DEM_CENTER =  #{DEM_CENTER}
+	       AND DEM_MODEL =  #{DEM_MODEL}
+	</update>
+	<update id="updateInOut" parameterType="com.vo.InOutVo">
+	    update DT_INOUT_BONBU set DIB_QTY = #{DIB_QTY},
+	                              DIB_IODATE = #{DIB_IODATE},
+	                              CMN_UPD_DATE = getdate(),
+	                              CMN_UPD_PROG = #{CMN_UPD_PROG},
+	                              CMN_UPD_ID = #{CMN_UPD_ID}
+	     where DIB_DOCNO = #{DIB_DOCNO}
+	       AND DIB_IOTYPE =  #{DIB_IOTYPE}
+	       AND DIB_CENTER =  #{DIB_CENTER}
+	       AND DIB_MODEL =  #{DIB_MODEL}
+	</update>
+	<delete id="deleteEVENT" parameterType="String">
+		delete from DT_EVENT_OUT
+	     where DEO_DOCNO = #{value}
+	</delete>
+	<delete id="deleteEVENTMODEL" parameterType="com.vo.EventModelVo">
+		delete from DT_EVENT_MODEL
+	     where DEM_DOCNO = #{DEM_DOCNO}
+	       AND DEM_CENTER =  #{DEM_CENTER}
+	       AND DEM_MODEL =  #{DEM_MODEL}
+	</delete>
+	<delete id="deleteInOut" parameterType="com.vo.InOutVo">
+		delete from DT_INOUT_BONBU
+	     where DIB_DOCNO = #{DIB_DOCNO}
+	       AND DIB_IOTYPE =  #{DIB_IOTYPE}
+	       AND DIB_CENTER =  #{DIB_CENTER}
+	       AND DIB_MODEL =  #{DIB_MODEL}
+	</delete>
+	<select id="getAndroidEvent" resultType="java.util.LinkedHashMap" parameterType="String">
+	 SELECT DEO_DOCNO, DEO_CENTER, MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	        DEO_USER, MUT_UserName, CONVERT(CHAR(10), DEO_DATE, 23) as DEO_DATE, DEO_CMNT
+	   FROM DT_EVENT_OUT, MF_CENTER_INFO, MF_USER_TBL
+      WHERE DEO_DOCNO = #{value}
+        AND DEO_CENTER = MCI_CODE
+        AND DEO_USER = MUT_UserID
+	</select>
+	<select id="getAndroidEventModel" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+	 SELECT DEM_DOCNO, DEM_CENTER, MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	        DEM_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, MMC_KINDS,
+	        CONVERT(CHAR(10), DEM_DATE, 23) as DEM_DATE, DEM_USER, MUT_UserName, 
+	        CONVERT(CHAR(10), DEM_RETEMPDATE, 23) as DEM_RETEMPDATE,
+	        CONVERT(CHAR(10), DEM_REDATE, 23) as DEM_REDATE, DEM_REUESR,
+	        DEM_STS, CONVERT(VARCHAR(9), ISNULL(DEM_QTY, 0)) as DEM_QTY,
+	        ISNULL(A.INQTY, 0) - ISNULL(B.OUTQTY, 0) as DMJ_JEGO
+	   FROM MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE, MF_USER_TBL, DT_EVENT_MODEL
+	        left outer join DT_MODEL_JEGO on DEM_MODEL = DMJ_MODEL AND DEM_CENTER = DMJ_CENTER
+	        left outer join (SELECT DIB_MODEL, DIB_CENTER, SUM(DIB_QTY) AS INQTY
+	                          FROM DT_INOUT_BONBU 
+	                         WHERE DIB_IOTYPE = '1' AND DIB_IODATE <![CDATA[<]]> dateadd(day,1,#{NOWDATE})
+	                         GROUP BY DIB_MODEL, DIB_CENTER
+	                        ) A on A.DIB_MODEL = DEM_MODEL and A.DIB_CENTER = DEM_CENTER
+	        left outer join (SELECT DIB_MODEL, DIB_CENTER, SUM(DIB_QTY) AS OUTQTY
+	                          FROM DT_INOUT_BONBU 
+	                         WHERE DIB_IOTYPE = '2' AND DIB_IODATE <![CDATA[<]]> dateadd(day,1,#{NOWDATE})
+	                         GROUP BY DIB_MODEL, DIB_CENTER
+	                        ) B on B.DIB_MODEL = DEM_MODEL and B.DIB_CENTER = DEM_CENTER
+      WHERE DEM_DOCNO = #{DOCNO}
+        AND DEM_CENTER = MCI_CODE
+        AND DEM_MODEL = MMC_CODE
+        AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+        AND DEM_USER = MUT_UserID
+	  order by DEM_CENTER, DEM_MODEL
+	</select>
+	<update id="updateJego" parameterType="hashmap">
+		update DT_MODEL_JEGO
+		   set DMJ_JEGO = B.DMJ_JEGO + #{JEGO}
+		  FROM DT_MODEL_JEGO B
+		 WHERE DMJ_MODEL = B.DMJ_MODEL
+		   AND DMJ_CENTER = B.DMJ_CENTER
+		   AND DMJ_MODEL = #{MODEL}
+		   AND DMJ_CENTER = #{CENTER}
+	</update>
+	<select id="getEventReturn" resultType="com.vo.EventVo" parameterType="hashmap">
+	 SELECT rownum, DEM_DOCNO, DEM_CENTER, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			DEM_MODEL, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+			DEM_QTY, DEM_DATE, DEM_USER, DEM_USERNAME, 
+			DEM_RETEMPDATE, DEM_REDATE, DEM_REUESR, DEM_REUESRNAME,
+			DEM_STS, DEM_CMNT, totalCnt
+	   FROM
+	   (
+	       SELECT ROW_NUMBER() OVER(ORDER BY DEM_DATE, DT_EVENT_MODEL.CMN_MAK_DATE, MCI_CODE, MMC_CODE) AS rownum,
+	              DEM_DOCNO, DEM_CENTER, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	              DEM_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+	              ISNULL(DEM_QTY, 0) as DEM_QTY, CONVERT(CHAR(10), DEM_DATE, 23) as DEM_DATE, DEM_USER, A.MUT_UserName as DEM_USERNAME, 
+	              CONVERT(CHAR(10), DEM_RETEMPDATE, 23) as DEM_RETEMPDATE, CONVERT(CHAR(10), DEM_REDATE, 23) as DEM_REDATE, DEM_REUESR, B.MUT_UserName as DEM_REUESRNAME,
+	              case when DEM_STS = '1' and DEM_RETEMPDATE <![CDATA[<]]> getdate() then '5' else DEM_STS end as DEM_STS,
+	              DEM_CMNT, COUNT(*) OVER() AS totalCnt
+	         FROM MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE, MF_USER_TBL A, DT_EVENT_MODEL
+			      left outer join MF_USER_TBL B on DEM_REUESR = B.MUT_UserID
+            WHERE DEM_CENTER = MCI_CODE
+              AND DEM_MODEL = MMC_CODE
+              AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+              AND DEM_USER = A.MUT_UserID
+              AND MMC_KINDS = '3'
+            <if test="StartDay == '' and EndDay != ''">
+		      AND DEM_DATE <![CDATA[<=]]> #{EndDay}
+	    	</if>
+	    	<if test="StartDay != '' and EndDay == ''">
+		      AND DEM_DATE <![CDATA[>=]]> #{StartDay}
+	    	</if>
+	    	<if test="StartDay != '' and EndDay != ''">
+		      AND DEM_DATE between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != ''">
+		      AND MCI_LOGC = #{LOGC}
+		    </if>
+		    <if test="BONBU != ''">
+		      AND MCI_Bonbu = #{BONBU}
+		    </if>
+		    <if test="CENTER != ''">
+		      AND MCI_Center = #{CENTER}
+	        </if>
+	        <if test="ENAME != ''">
+		      AND DEM_DOCNO like '%${ENAME}%'
+	        </if>
+	        <if test="BISSTS != null and !BISSTS.equals('')  ">
+	        <choose>
+	        <when test="BISSTS == 1 ">
+	        	AND DEM_STS = '1' AND DEM_RETEMPDATE <![CDATA[>]]> getdate()
+	        </when>
+	        <when test="BISSTS == 5 ">
+	        	AND DEM_STS = '1' AND DEM_RETEMPDATE <![CDATA[<]]> getdate()
+	        </when>
+	        <otherwise>
+	        	AND DEM_STS = #{BISSTS}
+	        </otherwise>
+	        </choose>
+		    </if>
+	   ) MAIN
+	  WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<update id="updateEventReturn" parameterType="com.vo.EventVo">
+	 	update DT_EVENT_MODEL 
+	       set DEM_STS = #{DEM_STS},
+	       	   DEM_CMNT = #{DEM_CMNT},
+	       	   <if test="DEM_STS == 4 ">
+	       	   DEM_REUESR = #{DEM_REUESR},
+	       	   DEM_REDATE = getdate(),
+	       	   </if>
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where DEM_DOCNO = #{DEM_DOCNO}
+	       AND DEM_CENTER = #{DEM_CENTER}
+	       AND DEM_MODEL = #{DEM_MODEL}
+	</update>
+	<select id="getEventModel" resultType="com.vo.EventModelVo" parameterType="hashmap">
+	 SELECT DEM_DOCNO, DEM_CENTER, DEM_MODEL, CONVERT(CHAR(10), DEM_DATE, 23) as DEM_DATE, DEM_USER,
+	        CONVERT(CHAR(10), DEM_RETEMPDATE, 23) as DEM_RETEMPDATE, 
+	        CONVERT(CHAR(10), DEM_REDATE, 23) as DEM_REDATE, DEM_REUESR,
+	        DEM_STS, DEM_QTY, DEM_CMNT
+	   FROM DT_EVENT_MODEL
+	  WHERE DEM_DOCNO = #{DOCNO}
+	    AND DEM_CENTER = #{CENTER}
+	    AND DEM_MODEL = #{MODEL}
+	</select>
+	<select id="getModelBepum" resultType="com.vo.ModelBepumVo" parameterType="hashmap">
+	 SELECT rownum, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	   	    MMC_CODE, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+	   	    DMJ_JEGO, MODEL_STS, CMNT, totalCnt
+	   FROM
+	   (
+	   	   SELECT ROW_NUMBER() OVER(ORDER BY MCI_CODE, MMC_CODE) AS rownum, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	   	          MMC_CODE, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+	   	          DMJ_JEGO, MODEL_STS, CMNT, COUNT(*) OVER() AS totalCnt
+	   	     FROM (
+	   	          <if test="BISSTS.equals('') or BISSTS == 1 ">
+	   	          SELECT MCI_CODE, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	   	                 MMC_CODE, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+	   	                 DMJ_JEGO, '보관' AS MODEL_STS, '' AS CMNT
+	   	            FROM DT_MODEL_JEGO, MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE
+	   	           WHERE DMJ_CENTER = MCI_CODE
+	   	             AND DMJ_MODEL = MMC_CODE
+	   	             AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+	   	             AND MMC_KINDS = '3'
+	   	             AND DMJ_JEGO <![CDATA[>]]> 0
+	   	           <if test="LOGC != ''">
+		             AND MCI_LOGC = #{LOGC}
+		           </if>
+		           <if test="BONBU != ''">
+		             AND MCI_Bonbu = #{BONBU}
+		           </if>
+		           <if test="CENTER != ''">
+		             AND MCI_Center = #{CENTER}
+	               </if>
+	               <if test="MNAME != ''">
+		             AND MMC_CODE like '%${MNAME}%'
+	               </if>
+	   	          UNION ALL
+	   	          </if>
+	   	          SELECT MCI_CODE, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	   	                 MMC_CODE, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+	   	                 DMJ_JEGO, MODEL_STS, CMNT
+	   	            FROM (
+				      SELECT MCI_CODE, MCI_LOGC, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	   	                     MMC_CODE, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+	   	                     DMJ_JEGO, DIB_RESN, DEM_STS, case when DIB_RESN = '1' AND DEM_STS = '3' then '분실' when DIB_RESN = '1' AND NOT DEM_STS = '3' then '보관' when DIB_RESN = '3' then '망실' else '' end AS MODEL_STS, DEM_CMNT AS CMNT,
+						     ROW_NUMBER() OVER (PARTITION BY MCI_Center, MMC_CODE  ORDER BY DIB_IODATE DESC, DT_INOUT_BONBU.CMN_MAK_DATE DESC) AS RankNo
+	   	                FROM DT_MODEL_JEGO, MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE, DT_INOUT_BONBU LEFT OUTER JOIN DT_EVENT_MODEL ON DIB_MODEL = DEM_MODEL AND DIB_CENTER = DEM_CENTER AND DIB_DOCNO = DEM_DOCNO
+	   	               WHERE DMJ_CENTER = MCI_CODE
+	   	                 AND DMJ_MODEL = MMC_CODE
+	   	                 AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+	   	                 AND MMC_KINDS = '3'
+	   	                 AND DMJ_JEGO = 0 
+					     AND DMJ_MODEL = DIB_MODEL
+				    	 AND DMJ_CENTER = DIB_CENTER
+				    	 AND DIB_IOTYPE = '2'
+				    ) T
+                   WHERE RankNo = 1
+                     AND NOT DIB_RESN = '2'
+                   <if test="LOGC != ''">
+		             AND MCI_LOGC = #{LOGC}
+		           </if>
+		           <if test="BONBU != ''">
+		             AND MCI_Bonbu = #{BONBU}
+		           </if>
+		           <if test="CENTER != ''">
+		             AND MCI_Center = #{CENTER}
+	               </if>
+	               <if test="MNAME != ''">
+		             AND MMC_CODE like '%${MNAME}%'
+	               </if>
+	               <if test="BISSTS != null and !BISSTS.equals('')  ">
+	               <choose>
+	               <when test="BISSTS == 1 ">
+	        	     AND DIB_RESN = '1' AND NOT DEM_STS = '3'
+	               </when>
+	               <when test="BISSTS == 2 ">
+	        	     AND DIB_RESN = '1' AND DEM_STS = '3'
+	               </when>
+	               <otherwise>
+	        	     AND DIB_RESN = '3'
+	               </otherwise>
+	               </choose>
+		           </if>
+	   	     ) SUB
+	   ) MAIN
+	  WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getAndroidModelRetuen" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+	 SELECT rownum, DEM_DOCNO, DEM_CENTER, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	   	    DEM_MODEL, MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+	   	    DEM_QTY, DEM_DATE, DEM_USER, DEM_USERNAME, 
+	   	    DEM_RETEMPDATE, DEM_REDATE, DEM_REUESR, DEM_REUESRNAME,
+	   	    DEM_STS, DEM_CMNT
+	   FROM
+	   (
+	   	   SELECT ROW_NUMBER() OVER (PARTITION BY MCI_Center, MMC_CODE  ORDER BY DEM_DATE DESC, DT_EVENT_MODEL.CMN_MAK_DATE DESC) AS rownum,
+	   	          DEM_DOCNO, DEM_CENTER, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+	   	          DEM_MODEL, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP,
+	   	          ISNULL(DEM_QTY, 0) as DEM_QTY, CONVERT(CHAR(10), DEM_DATE, 23) as DEM_DATE, DEM_USER, A.MUT_UserName as DEM_USERNAME, 
+	   	          CONVERT(CHAR(10), DEM_RETEMPDATE, 23) as DEM_RETEMPDATE, CONVERT(CHAR(10), DEM_REDATE, 23) as DEM_REDATE, DEM_REUESR, B.MUT_UserName as DEM_REUESRNAME,
+	   	          DEM_STS, DEM_CMNT
+	   	     FROM MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE, MF_USER_TBL A, DT_EVENT_MODEL
+	   	          left outer join MF_USER_TBL B on DEM_REUESR = B.MUT_UserID
+	   	    WHERE DEM_CENTER = MCI_CODE
+	   	      AND DEM_MODEL = MMC_CODE
+              AND MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+              AND DEM_USER = A.MUT_UserID
+              AND MMC_KINDS = '3'
+            <if test="StartDay == '' and EndDay != ''">
+		      AND DEM_DATE <![CDATA[<=]]> #{EndDay}
+	    	</if>
+	    	<if test="StartDay != '' and EndDay == ''">
+		      AND DEM_DATE <![CDATA[>=]]> #{StartDay}
+	    	</if>
+	    	<if test="StartDay != '' and EndDay != ''">
+		      AND DEM_DATE between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != ''">
+		      AND MCI_LOGC = #{LOGC}
+		    </if>
+		    <if test="BONBU != ''">
+		      AND MCI_Bonbu = #{BONBU}
+		    </if>
+		    <if test="CENTER != ''">
+		      AND MCI_Center = #{CENTER}
+	        </if>
+	        <if test="ENAME != ''">
+		      AND DEM_DOCNO like '%${ENAME}%'
+	        </if>
+	        <if test="BISSTS != null and !BISSTS.equals('') ">
+	          AND DEM_STS = #{BISSTS}
+		    </if>
+	   ) MAIN
+	   WHERE rownum = 1
+	</select>
+	<update id="updateAndroidReturn" parameterType="com.vo.EventVo">
+	 	update DT_EVENT_MODEL 
+	       set DEM_STS = #{DEM_STS},
+	       	   DEM_CMNT = #{DEM_CMNT},
+	       	   DEM_REUESR = #{DEM_REUESR},
+	       	   DEM_REDATE = #{DEM_REDATE},
+	       	   CMN_UPD_DATE = getdate(),
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where DEM_DOCNO = #{DEM_DOCNO}
+	       AND DEM_CENTER = #{DEM_CENTER}
+	       AND DEM_MODEL = #{DEM_MODEL}
+	</update>
+	<select id="getJegoMagamReport" resultType="com.vo.JegoMagamReportVo" parameterType="hashmap">
+		SELECT '0' as sumtype, B.MCI_CODE, B.MCI_LOGC, B.MCI_LOGCNAME, B.MCI_Bonbu, B.MCI_BonbuNAME, B.MCI_Center, B.MCI_CenterName, 
+		       B.MMC_CODE, B.MMC_LGROUP, B.MMC_LGROUPNAME, B.MMC_MGROUP, B.MMC_SGROUP,
+               ISNULL(A.QTY, 0) AS pqty, ISNULL(A.PRICE, 0) AS pprice, 
+	           ISNULL(C.DPI_QTY, 0) AS logcqty, ISNULL(C.PRICE, 0) AS logcprice,
+	           ISNULL(D.DPI_QTY, 0) AS moveinqty, ISNULL(D.PRICE, 0) AS moveinprice,
+	           ISNULL(E.DPI_QTY, 0) AS moveoutqty, ISNULL(E.PRICE, 0) AS moveoutprice,
+	           ISNULL(F.DPI_QTY, 0) AS otherqty, ISNULL(F.PRICE, 0) AS otherprice,
+	           ISNULL(G.DPI_QTY, 0) AS eventqty, ISNULL(G.PRICE, 0) AS eventprice,
+	           ISNULL(A.QTY, 0) + ISNULL(C.DPI_QTY, 0) + ISNULL(D.DPI_QTY, 0) + (ISNULL(E.DPI_QTY, 0)*(-1)) + (ISNULL(F.DPI_QTY, 0)*(-1)) + (ISNULL(G.DPI_QTY, 0)*(-1)) as nowqty,
+	           ISNULL(A.PRICE, 0) + ISNULL(C.PRICE, 0) + ISNULL(D.PRICE, 0) + (ISNULL(E.PRICE, 0)*(-1)) + (ISNULL(F.PRICE, 0)*(-1)) + (ISNULL(G.PRICE, 0)*(-1)) as nowprice
+          FROM
+          (
+              SELECT ROW_NUMBER() OVER(ORDER BY MCI_CODE, MMC_CODE) AS rownum, 
+                     MCI_CODE, MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+                     MMC_CODE, MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP
+	            FROM MF_CENTER_INFO, MF_MODEL_CODE, MF_COMM_CODE
+	           WHERE MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE  
+	             AND NOT MCI_Center = ' '
+	             AND NOT MMC_KINDS = '3'
+	            <if test="LOGC != ''">
+		         AND MCI_LOGC = #{LOGC}
+		        </if>
+		        <if test="BONBU != ''">
+		         AND MCI_Bonbu = #{BONBU}
+		        </if>
+		        <if test="CENTER != ''">
+		         AND MCI_Center = #{CENTER}
+	            </if>
+	          	<if test="LGROUP != ''">
+		         AND MMC_LGROUP = #{LGROUP}
+	            </if>
+	            <if test="KINDS != null and !KINDS.equals('') ">
+	             AND MMC_KINDS = #{KINDS}
+		        </if>
+          ) B
+          LEFT OUTER JOIN
+          (
+              SELECT DIB_CENTER, DIB_MODEL, 
+	                 SUM(CASE WHEN DIB_IOTYPE = '1' THEN QTY ELSE QTY*(-1) END) AS QTY, 
+	                 SUM(CASE WHEN DIB_IOTYPE = '1' THEN PRICE ELSE PRICE*(-1) END) AS PRICE
+	            FROM 
+	            (
+	                SELECT ROW_NUMBER() OVER(ORDER BY DIB_CENTER, DIB_MODEL, DIB_IOTYPE) AS rownum, 
+					       DIB_CENTER, DIB_MODEL, DIB_IOTYPE, DIB_IODATE, DPI_QTY AS QTY, DPI_PRICE AS UNIT, DPI_QTY * DPI_PRICE AS PRICE
+                      FROM DT_INOUT_BONBU, DT_PRICE_IN
+                     WHERE DIB_IOTYPE = '1' AND DIB_DOCNO = DPI_DOCNO AND DIB_CENTER = DPI_CENTER AND DIB_MODEL = DPI_MODEL
+	                   AND DIB_IODATE <![CDATA[<]]> #{StartDay}
+	                 UNION 
+	                SELECT ROW_NUMBER() OVER(ORDER BY DIB_CENTER, DIB_MODEL, DIB_IOTYPE) AS rownum, 
+					       DIB_CENTER, DIB_MODEL, DIB_IOTYPE, DIB_IODATE, DPO_QTY AS QTY, DPO_PRICE AS UNIT, DPO_QTY * DPO_PRICE AS PRICE
+                      FROM DT_INOUT_BONBU, DT_PRICE_OUT
+                     WHERE DIB_IOTYPE = '2' AND DIB_DOCNO = DPO_DOCNO AND DIB_CENTER = DPO_CENTER AND DIB_MODEL = DPO_MODEL
+		               AND DIB_IODATE <![CDATA[<]]> #{StartDay}
+		        ) A
+	           GROUP BY DIB_CENTER, DIB_MODEL
+          ) A ON A.DIB_CENTER = B.MCI_CODE AND A.DIB_MODEL = B.MMC_CODE
+          LEFT OUTER JOIN
+          (
+              SELECT DPI_CENTER, DPI_MODEL, SUM(DPI_QTY) AS DPI_QTY, SUM(DPI_QTY * DPI_PRICE) AS PRICE
+	            FROM DT_BONBU_IN, DT_PRICE_IN, DT_IN_LOGC 
+	           WHERE DBI_BisSts = 'Y' 
+	             AND DBI_CFMDATE BETWEEN #{StartDay} AND #{EndDay}
+		         AND DBI_DOCNO = DPI_DOCNO
+		         AND DBI_TOPDOCNO = DIL_DOCNO
+		         AND DIL_MODEL = DPI_MODEL
+		         AND DBI_CENTER = DPI_CENTER
+	           GROUP BY DPI_CENTER, DPI_MODEL
+          ) C ON C.DPI_CENTER = B.MCI_CODE AND C.DPI_MODEL = B.MMC_CODE
+          LEFT OUTER JOIN
+          (
+              SELECT DPI_CENTER, DPI_MODEL, SUM(DPI_QTY) AS DPI_QTY, SUM(DPI_QTY * DPI_PRICE) AS PRICE
+	            FROM DT_BONBU_ORDER, DT_BONBU_MOVE, DT_PRICE_IN 
+	           WHERE DBO_BisSts = 'Y' 
+	             AND DBO_CFMDATE BETWEEN #{StartDay} AND #{EndDay}
+		         AND DBO_DOCNO = DPI_DOCNO
+		         AND DBO_DOCNO = DBM_DOCNO
+		         AND DBO_MODEL = DPI_MODEL
+		         AND DBO_CENTER = DPI_CENTER
+	           GROUP BY DPI_CENTER, DPI_MODEL
+          ) D ON D.DPI_CENTER = B.MCI_CODE AND D.DPI_MODEL = B.MMC_CODE
+          LEFT OUTER JOIN
+          (
+              SELECT DPO_CENTER, DPO_MODEL, SUM(DPO_QTY) AS DPI_QTY, SUM(DPO_QTY * DPO_PRICE) AS PRICE
+	            FROM DT_BONBU_ORDER, DT_BONBU_MOVE, DT_PRICE_OUT
+	           WHERE DBM_Sts = 'Y' 
+	             AND DBM_DATE BETWEEN #{StartDay} AND #{EndDay}
+		         AND DBO_DOCNO = DPO_DOCNO
+		         AND DBO_DOCNO = DBM_DOCNO
+		         AND DBO_MODEL = DPO_MODEL
+		         AND DBM_CENTER = DPO_CENTER
+	           GROUP BY DPO_CENTER, DPO_MODEL
+          ) E ON E.DPO_CENTER = B.MCI_CODE AND E.DPO_MODEL = B.MMC_CODE
+          LEFT OUTER JOIN
+          (
+              SELECT DPO_CENTER, DPO_MODEL, SUM(DPO_QTY) AS DPI_QTY, SUM(DPO_QTY * DPO_PRICE) AS PRICE
+	            FROM DT_Other_OUT, DT_PRICE_OUT
+	           WHERE DOO_DATE BETWEEN #{StartDay} AND #{EndDay}
+		         AND DOO_DOCNO = DPO_DOCNO
+		         AND DOO_MODEL = DPO_MODEL
+		         AND DOO_CENTER = DPO_CENTER
+	           GROUP BY DPO_CENTER, DPO_MODEL
+          ) F ON F.DPO_CENTER = B.MCI_CODE AND F.DPO_MODEL = B.MMC_CODE
+          LEFT OUTER JOIN
+          (
+              SELECT DPO_CENTER, DPO_MODEL, SUM(DPO_QTY) AS DPI_QTY, SUM(DPO_QTY * DPO_PRICE) AS PRICE
+	            FROM DT_EVENT_MODEL, DT_PRICE_OUT
+	           WHERE DEM_DATE BETWEEN #{StartDay} AND #{EndDay}
+		         AND DEM_DOCNO = DPO_DOCNO
+		         AND DEM_MODEL = DPO_MODEL
+		         AND DEM_CENTER = DPO_CENTER
+	           GROUP BY DPO_CENTER, DPO_MODEL
+          ) G ON G.DPO_CENTER = B.MCI_CODE AND G.DPO_MODEL = B.MMC_CODE 
+		 ORDER BY B.MCI_CODE, B.MMC_CODE
+	</select>
+</mapper>

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="ErpMapper">
+	<select id="getEventInfo" resultType="com.vo.InOutListVo" parameterType="hashmap">
+		SELECT rownum, BONBUNAME, CENTERNAME, DOCNO, EUSERID, EUSERNAME,
+			   EVENTDATE, GROUPNAME, JNAME, ESTATE, GTYPE, totalCnt
+		FROM
+		(
+		SELECT ROW_NUMBER() OVER(ORDER BY a.행사시작일시, a.본부, a.센터) AS rownum,
+		       a.본부 as BONBUNAME, a.센터 as CENTERNAME, a.행사번호 as DOCNO, c.코드 as EUSERID, c.성함 as EUSERNAME, 
+		       a.행사시작일시 as EVENTDATE, b.단체명 as GROUPNAME, d.장례식장 as JNAME, a.행사상태 as ESTATE, a.일반단체구분 as GTYPE,
+		       COUNT(*) OVER() AS totalCnt
+		  from 행사마스터 a (nolock)
+		  left outer join 행사단체 b (nolock) on a.행사단체 = b.단체코드
+		  left outer join 행사의전팀장 c (nolock) on a.진행팀장 = c.코드
+		  left outer join 행사장례식장 d (nolock) on a.장례식장 = d.코드
+		  left outer join 행사_승인요청 e (nolock) on a.행사번호 = e.행사번호
+		 where 1=1
+		 <if test="StartDay == '' and EndDay != ''">
+		   AND SUBSTRING(a.행사시작일시,0,9) <![CDATA[<=]]> #{EndDay}
+		 </if>
+		 <if test="StartDay != '' and EndDay == ''">
+		   AND SUBSTRING(a.행사시작일시,0,9) <![CDATA[>=]]> #{StartDay}
+		 </if>
+		  <if test="StartDay != '' and EndDay != ''">
+		   AND SUBSTRING(a.행사시작일시,0,9) between #{StartDay} AND #{EndDay}
+		 </if>
+		 <if test="BONBU != ''">
+			<choose>
+			<when test="BONBU == '수도권'">
+			AND (a.본부 = '수도권' or a.본부 = '외주') 
+			</when>
+			<otherwise>
+			AND a.본부 = #{BONBU}
+			</otherwise>
+			</choose>
+		 </if>
+		 <if test="CENTER != ''">
+			<choose>
+			<when test="CENTER == '본부'">
+			AND (a.센터 = '본부' or a.센터 = '') 
+			</when>
+			<otherwise>
+			AND a.센터 = #{CENTER}
+			</otherwise>
+			</choose>
+	     </if>
+		 <if test="EUSERNAME != null and EUSERNAME != ''">
+		   AND c.성함 like '%${EUSERNAME}%'
+		 </if>
+		 <if test="GNAME != null and GNAME != ''">
+		   AND b.단체명 like '%${GNAME}%'
+		 </if>
+		 <if test="JNAME != null and JNAME != ''">
+		   AND d.장례식장 like '%${JNAME}%'
+		 </if>
+		 <if test="ESTATE != null and ESTATE != ''">
+		   AND a.행사상태 = #{ESTATE}
+		 </if>
+		 <if test="GTYPE != null and GTYPE != ''">
+		   AND a.일반단체구분 = #{GTYPE}
+		 </if>
+		) MAIN
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getAndroidEventInfo" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+		SELECT a.본부 as BONBUNAME, a.센터 as CENTERNAME, a.행사번호 as DOCNO, c.코드 as EUSERID, c.성함 as EUSERNAME, 
+		       a.행사시작일시 as EVENTDATE, b.단체명 as GROUPNAME, d.장례식장 as JNAME, a.행사상태 as ESTATE, a.일반단체구분 as GTYPE
+		  from 행사마스터 a (nolock)
+		  left outer join 행사단체 b (nolock) on a.행사단체 = b.단체코드
+		  left outer join 행사의전팀장 c (nolock) on a.진행팀장 = c.코드
+		  left outer join 행사장례식장 d (nolock) on a.장례식장 = d.코드
+		  left outer join 행사_승인요청 e (nolock) on a.행사번호 = e.행사번호
+		 where 1=1
+		 <if test="StartDay == '' and EndDay != ''">
+		   AND SUBSTRING(a.행사시작일시,0,9) <![CDATA[<=]]> #{EndDay}
+		 </if>
+		 <if test="StartDay != '' and EndDay == ''">
+		   AND SUBSTRING(a.행사시작일시,0,9) <![CDATA[>=]]> #{StartDay}
+		 </if>
+		  <if test="StartDay != '' and EndDay != ''">
+		   AND SUBSTRING(a.행사시작일시,0,9) between #{StartDay} AND #{EndDay}
+		 </if>
+		 <if test="BONBU != ''">
+			<choose>
+			<when test="BONBU == '수도권'">
+			AND (a.본부 = '수도권' or a.본부 = '외주') 
+			</when>
+			<otherwise>
+			AND a.본부 = #{BONBU}
+			</otherwise>
+			</choose>
+		 </if>
+		 <if test="CENTER != ''">
+			<choose>
+			<when test="CENTER == '본부'">
+			AND (a.센터 = '본부' or a.센터 = '') 
+			</when>
+			<otherwise>
+			AND a.센터 = #{CENTER}
+			</otherwise>
+			</choose>
+	     </if>
+		 <if test="EUSERNAME != null and EUSERNAME != ''">
+		   AND c.성함 like '%${EUSERNAME}%'
+		 </if>
+		 <if test="GNAME != null and GNAME != ''">
+		   AND b.단체명 like '%${GNAME}%'
+		 </if>
+		 <if test="JNAME != null and JNAME != ''">
+		   AND d.장례식장 like '%${JNAME}%'
+		 </if>
+		 <if test="ESTATE != null and ESTATE != ''">
+		   AND a.행사상태 = #{ESTATE}
+		 </if>
+		 <if test="GTYPE != null and GTYPE != ''">
+		   AND a.일반단체구분 = #{GTYPE}
+		 </if>
+		 ORDER BY a.행사시작일시, a.본부, a.센터
+	</select>
+	<select id="getGTYPELIST" resultType="com.vo.InOutListVo">
+		SELECT a.일반단체구분 as GTYPE, count(a.일반단체구분) from 행사마스터 a (nolock) group by a.일반단체구분
+	</select>
+	<select id="getAndroidGTYPELIST" resultType="java.util.LinkedHashMap">
+		SELECT a.일반단체구분 as GTYPE, count(a.일반단체구분) from 행사마스터 a (nolock) group by a.일반단체구분
+	</select>
+	<select id="getAndroidEventDetail" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+		SELECT a.본부 as BONBUNAME, a.센터 as CENTERNAME, a.행사번호 as DOCNO, c.코드 as EUSERID, c.성함 as EUSERNAME, 
+		       a.행사시작일시 as EVENTDATE, b.단체명 as GROUPNAME, d.장례식장 as JNAME, a.행사상태 as ESTATE, a.일반단체구분 as GTYPE
+		  from 행사마스터 a (nolock)
+		  left outer join 행사단체 b (nolock) on a.행사단체 = b.단체코드
+		  left outer join 행사의전팀장 c (nolock) on a.진행팀장 = c.코드
+		  left outer join 행사장례식장 d (nolock) on a.장례식장 = d.코드
+		  left outer join 행사_승인요청 e (nolock) on a.행사번호 = e.행사번호
+		 where a.행사번호 = #{DOCNO}
+		 ORDER BY a.행사시작일시, a.본부, a.센터
+	</select>
+</mapper>

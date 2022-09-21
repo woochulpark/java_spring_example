@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="NoticeMapper">
+	<select id="getNoticeInfo" resultType="com.vo.NoticeVo" parameterType="String">
+		SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, 
+			   MNI_UserID, MUT_UserName, MNI_POPUP, MNI_TopNotice, MNI_ReceiveType,
+			   MNI_CTYPE, MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			   MNI_Cmnt, USERCNT, MNI_TempSts
+		  FROM MF_NOTICE_INFO
+			   left outer join MF_USER_TBL on  MNI_UserID = MUT_UserID
+			   left outer join MF_CENTER_INFO on MNI_ReceiveType = '1' AND ((MNI_CTYPE = '0' AND MNI_LOGC = MCI_LOGC AND MCI_Bonbu  = ' ' AND MCI_Center = ' ')
+			    								 or
+			    								 (MNI_CTYPE = '1' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND MCI_Center = ' ')
+			    								 or
+			    								 (MNI_CTYPE = '2' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND MNI_Center = MCI_Center))
+			   left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER WHERE MNU_DOCNO = #{value} GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+		 WHERE MNI_DOCNO = #{value}
+	</select>
+	<select id="getLastNoticeDocNo" resultType="com.vo.NoticeVo">
+		SELECT CONVERT(CHAR(8), GETDATE(), 112) as MNI_DATE, ISNULL(MAX(MNI_SEQ), 0) AS MNI_SEQ
+		  FROM MF_NOTICE_INFO 
+		 WHERE convert(char(8), MNI_DATE , 112) = CONVERT(CHAR(8), GETDATE(), 112)
+	</select>
+	<select id="getNoticeList" resultType="com.vo.NoticeVo" parameterType="hashmap">
+		SELECT rownum, MNI_DOCNO, MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+			   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, INFOCHK, totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY MNI_TempSts, MNI_TopNotice, MNI_DATE DESC) AS rownum, 
+			       MNI_DOCNO, MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+			       MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, INFOCHK,
+				   COUNT(*) OVER() AS totalCnt
+		      FROM (
+					SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+      	 				   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  					  FROM MF_NOTICE_INFO left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                      				      left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+                      				      left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{USERID}
+ 					 WHERE MNI_UserID = #{USERID}
+					UNION ALL
+					SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+       					   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  					  FROM MF_NOTICE_INFO left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                      					  left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					 					  left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{USERID}
+ 					 WHERE NOT MNI_UserID = #{USERID}  
+   					   AND MNI_ReceiveType = '0'
+   					   AND NOT MNI_TempSts = 'N'
+					UNION ALL
+					SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+       					   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  					  FROM MF_NOTICE_INFO left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                      				      left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					 					  left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{USERID}
+ 					 WHERE NOT MNI_UserID = #{USERID}  
+   					   AND MNI_ReceiveType = '1' 
+   					   AND NOT MNI_TempSts = 'N'
+   					   AND EXISTS(
+			  						SELECT MUT_UserID FROM MF_USER_TBL, MF_CENTER_INFO WHERE MCI_CODE = MUT_Center AND MUT_USERID = #{USERID}  AND
+									(
+										(MNI_CTYPE = '0' AND MNI_LOGC = MCI_LOGC AND NOT MCI_Center = ' ')
+										or
+										(MNI_CTYPE = '1' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND NOT MCI_Center = ' ')
+										or
+										(MNI_CTYPE = '2' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND MNI_Center = MCI_Center)
+									)
+								)
+					UNION ALL
+					SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+       					   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  					  FROM MF_NOTICE_SUSIN, MF_NOTICE_INFO left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                        								   left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 														   left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{USERID}
+ 					 WHERE NOT MNI_UserID = #{USERID}  
+   					   AND MNI_ReceiveType = '2'
+   					   AND NOT MNI_TempSts = 'N'
+   					   AND MNI_DOCNO = MNS_DOCNO
+   					   AND MNS_UserID = #{USERID} 
+		      		) B
+		     WHERE 1 = 1
+		      <if test="TITLE != null and TITLE != ''">
+			   AND MNI_TITLE like '%${TITLE}%'
+			  </if>
+		) A 
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getNoticeMainList" resultType="com.vo.NoticeVo" parameterType="hashmap">
+		SELECT rownum, MNI_DOCNO, MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+			   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, INFOCHK, totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY MNI_TopNotice, MNI_DATE DESC) AS rownum, 
+			       MNI_DOCNO, MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+			       MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, INFOCHK,
+				   COUNT(*) OVER() AS totalCnt
+		      FROM (
+		      		SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+      	 				   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  					  FROM MF_NOTICE_INFO left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                      				      left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					 					  left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{USERID}
+ 					 WHERE MNI_UserID = #{USERID}
+					UNION ALL
+					SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+       					   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  					  FROM MF_NOTICE_INFO left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                      					  left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					 					  left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{USERID}
+ 					 WHERE NOT MNI_UserID = #{USERID}  
+   					   AND MNI_ReceiveType = '0'
+					UNION ALL
+					SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+       					   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  					  FROM MF_NOTICE_INFO left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                      				      left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					 					  left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{USERID}
+ 					 WHERE NOT MNI_UserID = #{USERID}  
+   					   AND MNI_ReceiveType = '1' 
+   					   AND EXISTS(
+			  						SELECT MUT_UserID FROM MF_USER_TBL, MF_CENTER_INFO WHERE MCI_CODE = MUT_Center AND MUT_USERID = #{USERID}  AND
+									(
+										(MNI_CTYPE = '0' AND MNI_LOGC = MCI_LOGC AND NOT MCI_Center = ' ')
+										or
+										(MNI_CTYPE = '1' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND NOT MCI_Center = ' ')
+										or
+										(MNI_CTYPE = '2' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND MNI_Center = MCI_Center)
+									)
+								)
+					UNION ALL
+					SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+       					   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  					  FROM MF_NOTICE_SUSIN, MF_NOTICE_INFO left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                        								   left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					 									   left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{USERID}
+ 					 WHERE NOT MNI_UserID = #{USERID}  
+   					   AND MNI_ReceiveType = '2'
+   					   AND MNI_DOCNO = MNS_DOCNO
+   					   AND MNS_UserID = #{USERID} 
+		      		) B
+		   	 WHERE 1 = 1
+		       AND MNI_TempSts ='Y'
+		) A 
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getAndroidNoticeInfo" resultType="com.vo.NoticeVo" parameterType="String">
+		SELECT MNI_DOCNO, MNI_TITLE, MNI_Cmnt
+		  FROM MF_NOTICE_INFO
+		 WHERE MNI_DOCNO = #{value}
+	</select>
+	<select id="getAndroidFileList" resultType="java.util.LinkedHashMap" parameterType="String">
+		SELECT MDF_DOCNO, MDF_SEQ, MDF_FILE, MDF_FILE_Org, MDF_FILE_SIZE
+		  FROM MF_DATA_FILE
+		 WHERE MDF_DOCNO = #{value}
+	</select>
+	<select id="getAndroidNoticeMainList" resultType="java.util.LinkedHashMap" parameterType="String">
+		SELECT MNI_DOCNO, MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+			   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, INFOCHK
+		  FROM (
+		      	SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+      	 			   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  				  FROM MF_NOTICE_INFO 
+  				       left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                       left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					   left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{value}
+ 				 WHERE MNI_UserID = #{value}
+				 UNION ALL
+				SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+       				   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  				  FROM MF_NOTICE_INFO 
+  				       left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                       left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					   left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{value}
+ 				 WHERE NOT MNI_UserID = #{value}
+   					   AND MNI_ReceiveType = '0'
+				 UNION ALL
+				SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+       				   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  				  FROM MF_NOTICE_INFO 
+  				       left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                       left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					   left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{value}
+ 				 WHERE NOT MNI_UserID = #{value}
+   				   AND MNI_ReceiveType = '1' 
+   			       AND EXISTS(
+			  					SELECT MUT_UserID FROM MF_USER_TBL, MF_CENTER_INFO WHERE MCI_CODE = MUT_Center AND MUT_USERID = #{value}  AND
+								(
+									(MNI_CTYPE = '0' AND MNI_LOGC = MCI_LOGC AND NOT MCI_Center = ' ')
+									or
+									(MNI_CTYPE = '1' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND NOT MCI_Center = ' ')
+									or
+									(MNI_CTYPE = '2' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND MNI_Center = MCI_Center)
+								)
+							)
+				 UNION ALL
+				SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MUT_UserName,
+       				   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, USERCNT, case when MNU_UserID is null then 'N' else 'Y' end as INFOCHK 
+  				  FROM MF_NOTICE_SUSIN, MF_NOTICE_INFO 
+  					   left outer join MF_USER_TBL on MNI_UserID = MUT_UserID
+                       left outer join ( SELECT MNU_DOCNO, COUNT(MNU_DOCNO) AS USERCNT FROM MF_NOTICE_USER GROUP BY MNU_DOCNO ) A on MNI_DOCNO = A.MNU_DOCNO
+ 					   left outer join MF_NOTICE_USER B on MNI_DOCNO = B.MNU_DOCNO AND MNU_UserID = #{value}
+ 				 WHERE NOT MNI_UserID = #{value}
+   				   AND MNI_ReceiveType = '2'
+   				   AND MNI_DOCNO = MNS_DOCNO
+   				   AND MNS_UserID = #{value}
+		      	) B
+		 WHERE MNI_TempSts ='Y'
+		 ORDER BY MNI_TopNotice, MNI_DATE DESC
+	</select>
+	<select id="getNoticeMainPopup" resultType="com.vo.NoticeVo" parameterType="String">
+		SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MNI_POPUP,
+			   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, MNI_Cmnt, #{value} + MNI_DOCNO as POPID
+		  FROM MF_NOTICE_INFO
+		 WHERE MNI_ReceiveType = '0'
+		   AND MNI_POPUP = 'Y'
+	       AND MNI_TempSts = 'Y'
+	       AND DATEADD(DAY,7, MNI_DATE) <![CDATA[>=]]> getdate()
+		UNION ALL
+		SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MNI_POPUP,
+			   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, MNI_Cmnt, #{value} + MNI_DOCNO as POPID
+		  FROM MF_NOTICE_INFO
+		 WHERE MNI_ReceiveType = '1' 
+		   AND MNI_POPUP = 'Y'
+	       AND MNI_TempSts = 'Y'
+	       AND DATEADD(DAY,7, MNI_DATE) <![CDATA[>=]]> getdate()
+		   AND EXISTS(
+						SELECT MUT_UserID FROM MF_USER_TBL, MF_CENTER_INFO WHERE MCI_CODE = MUT_Center AND MUT_USERID = #{value}  AND
+						(
+							(MNI_CTYPE = '0' AND MNI_LOGC = MCI_LOGC AND NOT MCI_Center = ' ')
+							or
+							(MNI_CTYPE = '1' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND NOT MCI_Center = ' ')
+							or
+							(MNI_CTYPE = '2' AND MNI_LOGC = MCI_LOGC AND MNI_BONBU = MCI_Bonbu AND MNI_Center = MCI_Center)
+							)
+					  )
+		UNION ALL
+		SELECT MNI_DOCNO, CONVERT(CHAR(10), MNI_DATE, 23) as MNI_DATE, MNI_TITLE, MNI_UserID, MNI_POPUP,
+			   MNI_TopNotice, MNI_ReceiveType, MNI_TempSts, MNI_Cmnt, #{value} + MNI_DOCNO as POPID
+  		  FROM MF_NOTICE_SUSIN, MF_NOTICE_INFO
+ 		 WHERE MNI_ReceiveType = '2'
+ 		   AND MNI_POPUP = 'Y'
+	       AND MNI_TempSts = 'Y'
+	       AND DATEADD(DAY,7, MNI_DATE) <![CDATA[>=]]> getdate()
+   		   AND MNI_DOCNO = MNS_DOCNO
+   		   AND MNS_UserID = #{value}
+	</select>
+	<select id="getSusinList" resultType="com.vo.UserVo" parameterType="String">
+		SELECT MUT_USERID, MUT_USERNAME, MUT_USERPWD, MUT_CENTER, 
+			   MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			   MUT_POSITION, MCC_S_NAME AS POSITIONNAME
+		  FROM MF_NOTICE_SUSIN, 
+		       MF_USER_TBL  
+		  	   left outer join MF_CENTER_INFO on MUT_CENTER = MCI_CODE
+			   left outer join MF_COMM_CODE on MCC_L_CODE = '100' AND MCC_M_CODE = 'POZSN' AND MUT_POSITION = MCC_S_CODE
+		 WHERE MNS_DOCNO = #{value}
+		   AND MNS_UserID = MUT_UserID;
+	</select>
+	<select id="getNoticeFileList" resultType="com.vo.NoticeVo" parameterType="String">
+		SELECT MDF_DOCNO, MDF_SEQ, MDF_FILE, MDF_FILE_Org, MDF_FILE_SIZE
+		  FROM MF_DATA_FILE
+		 WHERE MDF_DOCNO = #{value}
+	</select>
+	<select id="getNoticeFileInfo" resultType="com.vo.NoticeVo" parameterType="hashmap">
+		SELECT MDF_DOCNO, MDF_SEQ, MDF_FILE, MDF_FILE_Org, MDF_FILE_SIZE
+		  FROM MF_DATA_FILE
+		 WHERE MDF_DOCNO = #{DOCNO}
+		   AND MDF_SEQ = #{SEQ}
+	</select>
+	<select id="getNoticeUser" resultType="com.vo.NoticeVo" parameterType="hashmap">
+		SELECT MNU_UserID, MUT_UserName,
+			   MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			   MCC_S_NAME AS POSITIONNAME,
+			   CONVERT(CHAR(10), MNU_DATE, 23) as MNU_DATE
+		  FROM MF_NOTICE_USER, 
+		       MF_USER_TBL  
+		  	   left outer join MF_CENTER_INFO on MUT_CENTER = MCI_CODE
+			   left outer join MF_COMM_CODE on MCC_L_CODE = '100' AND MCC_M_CODE = 'POZSN' AND MUT_POSITION = MCC_S_CODE
+		 WHERE MNU_DOCNO = #{value}
+		   AND MNU_UserID = MUT_UserID;
+	</select>
+	<insert id="insertSusinList" parameterType="java.util.List">
+        insert into MF_NOTICE_SUSIN(MNS_DOCNO, MNS_UserID)
+        values
+        <foreach collection="list" item="item" separator=" , ">
+            (#{item.MNS_DOCNO}, #{item.MNS_UserID})
+        </foreach>
+	</insert>
+	<insert id="insertNotice" parameterType="com.vo.NoticeVo">
+        insert into MF_NOTICE_INFO(MNI_DOCNO,MNI_DATE,MNI_SEQ,MNI_TITLE,MNI_UserID,MNI_POPUP,MNI_TopNotice,
+        						   MNI_ReceiveType,MNI_CTYPE,MNI_LOGC,MNI_BONBU,MNI_Center,MNI_TempSts,MNI_Cmnt,
+        						   CMN_DEL_STS,CMN_MAK_DATE,CMN_MAK_PROG,CMN_MAK_ID,CMN_UPD_DATE,CMN_UPD_PROG,CMN_UPD_ID)
+        values(#{MNI_DOCNO},#{MNI_DATE}, #{MNI_SEQ}, #{MNI_TITLE}, #{MNI_UserID}, #{MNI_POPUP}, #{MNI_TopNotice},
+               #{MNI_ReceiveType}, #{MNI_CTYPE}, #{MCI_LOGC}, #{MCI_Bonbu}, #{MCI_Center}, #{MNI_TempSts}, #{MNI_Cmnt},
+               'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<update id="updateNotice" parameterType="com.vo.NoticeVo">
+		update MF_NOTICE_INFO set
+		       MNI_TITLE = #{MNI_TITLE},
+		       MNI_UserID = #{MNI_UserID},
+		       MNI_POPUP = #{MNI_POPUP},
+		       MNI_TopNotice = #{MNI_TopNotice},
+		       MNI_ReceiveType = #{MNI_ReceiveType},
+		       MNI_CTYPE = #{MNI_CTYPE},
+		       MNI_LOGC = #{MCI_LOGC},
+		       MNI_BONBU = #{MCI_Bonbu},
+		       MNI_Center = #{MCI_Center},
+		       MNI_TempSts = #{MNI_TempSts},
+		       MNI_Cmnt = #{MNI_Cmnt},
+		       CMN_UPD_DATE = getdate(),
+		       CMN_UPD_PROG = #{CMN_UPD_PROG},
+			   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MNI_DOCNO = #{MNI_DOCNO}
+	</update>
+	<update id="updateNoticeUser" parameterType="com.vo.NoticeVo">
+		MERGE INTO MF_NOTICE_USER A
+		USING (SELECT #{USERID} AS ID, #{DOCNO} AS DOCNO ) B ON(A.MNU_DOCNO = B.DOCNO AND A.MNU_UserID = B.ID)
+		WHEN MATCHED THEN
+		UPDATE SET MNU_DATE = getdate()
+		WHEN NOT MATCHED THEN
+		INSERT (MNU_DOCNO, MNU_UserID, MNU_DATE) values (#{DOCNO}, #{USERID}, getdate());
+	</update>
+	<insert id="insertNoticeFile" parameterType="com.vo.NoticeVo">
+		<selectKey resultType="string" keyProperty="MDF_SEQ" order="BEFORE">
+        	SELECT ISNULL(MAX(MDF_SEQ),'0') + 1 as MDF_SEQ FROM MF_DATA_FILE WHERE MDF_DOCNO = #{MDF_DOCNO}     
+    	</selectKey>  
+        insert into MF_DATA_FILE(MDF_DOCNO, MDF_SEQ, MDF_FILE, MDF_FILE_Org, MDF_FILE_SIZE)
+        values(#{MDF_DOCNO}, #{MDF_SEQ}, #{MDF_DOCNO} + #{MDF_SEQ} + #{MDF_FILE_Org}, #{MDF_FILE_Org}, #{MDF_FILE_SIZE})
+	</insert>
+	<delete id="deleteNoticeFile" parameterType="hashmap">
+	    delete from MF_DATA_FILE
+	     WHERE MDF_DOCNO = #{DOCNO}
+		   AND MDF_SEQ = #{SEQ}
+	</delete>
+	<delete id="deleteSusinList" parameterType="String">
+	    delete from MF_NOTICE_SUSIN
+	     WHERE MNS_DOCNO = #{value}
+	</delete>
+	<delete id="deleteNoticeUser" parameterType="String">
+	    delete from MF_NOTICE_USER
+	     WHERE MNU_DOCNO = #{value}
+	</delete>
+	<delete id="deleteNotice" parameterType="String">
+	    delete from MF_NOTICE_INFO
+	     WHERE MNI_DOCNO = #{value}
+	</delete>
+</mapper>

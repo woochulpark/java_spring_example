@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="CenterMapper">
+	<select id="getBONBUList" resultType="com.vo.CenterVo" parameterType="hashmap">
+		SELECT MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME FROM MF_CENTER_INFO WHERE MCI_LOGC = #{LOGC} AND NOT MCI_Bonbu = ' ' AND MCI_Center = ' ' order by MCI_LOGC, MCI_Bonbu
+	</select>
+	<select id="getCENTERList" resultType="com.vo.CenterVo" parameterType="hashmap">
+		SELECT MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName FROM MF_CENTER_INFO WHERE MCI_LOGC = #{LOGC} AND MCI_Bonbu = #{BONBU} AND NOT MCI_Center = ' ' order by MCI_LOGC, MCI_Bonbu, MCI_SORT_ORDER
+	</select>
+	<select id="getLOGCInfo" resultType="com.vo.CenterVo">
+		SELECT MCI_LOGC, MCI_LOGCNAME FROM MF_CENTER_INFO WHERE MCI_Bonbu = ' ' AND MCI_Center = ' ' order by MCI_LOGC
+	</select>
+	<select id="getLOGCInfo_Detail" resultType="com.vo.CenterVo">
+		SELECT MCI_LOGC, MCI_LOGCNAME, MCI_BRN, MCI_CoName, MCI_CEO, MCI_Addr, MCI_CoType, MCI_Jongmog, MCI_PIC, MCI_PICHP FROM MF_CENTER_INFO WHERE MCI_Bonbu = ' ' AND MCI_Center = ' ' AND MCI_LOGC = #{LOGC}
+	</select>
+	<select id="getBONBUInfo_Detail" resultType="com.vo.CenterVo">
+		SELECT MCI_LOGC, MCI_LOGCNAME,MCI_Bonbu, MCI_BonbuNAME FROM MF_CENTER_INFO WHERE MCI_Center = ' ' AND MCI_LOGC = #{LOGC} AND MCI_Bonbu = #{BONBU}
+	</select>
+	<select id="getCENTERInfo_Detail" resultType="com.vo.CenterVo">
+		SELECT MCI_LOGC, MCI_Bonbu, MCI_Center, MCI_LOGCNAME, MCI_BonbuNAME, MCI_CenterName, MCI_CODE, MCI_BRN, MCI_CoName, MCI_CEO, MCI_Addr, MCI_CoType, MCI_Jongmog, MCI_PIC, MCI_PICHP, CONVERT(CHAR(10), MCI_StartDay, 23) as MCI_StartDay, CONVERT(CHAR(10), MCI_EndDay, 23) as MCI_EndDay, MCI_BizSts, MCI_CMNT, MCI_SORT_ORDER FROM MF_CENTER_INFO WHERE MCI_LOGC = #{LOGC} AND MCI_Bonbu = #{BONBU} AND MCI_Center = #{CENTER}
+	</select>
+	<select id="getLOGCDetail" resultType="com.vo.CenterVo" parameterType="hashmap">
+		select * from (
+			select MCI_LOGC, MCI_Bonbu, MCI_LOGCNAME, MCI_BonbuNAME from MF_CENTER_INFO where MCI_Bonbu = ' ' 
+			union
+			select MCI_LOGC, MCI_Bonbu, MCI_LOGCNAME, MCI_BonbuNAME from MF_CENTER_INFO where MCI_LOGC = #{LOGC}
+			) a
+		order by MCI_LOGC, MCI_Bonbu
+	</select>
+	<select id="getBONBUDetail" resultType="com.vo.CenterVo" parameterType="hashmap">
+		select * from (
+			SELECT MCI_LOGC, MCI_Bonbu, MCI_Center, MCI_LOGCNAME, MCI_BonbuNAME, MCI_CenterName, MCI_BRN, MCI_CoName, MCI_CEO, MCI_Addr, MCI_CoType, MCI_Jongmog, MCI_PIC, MCI_PICHP, CONVERT(CHAR(10), MCI_StartDay, 23) as MCI_StartDay, CONVERT(CHAR(10), MCI_EndDay, 23) as MCI_EndDay, MCI_BizSts, MCI_CMNT, MCI_SORT_ORDER from MF_CENTER_INFO where MCI_Bonbu = ' ' 
+			union
+			SELECT MCI_LOGC, MCI_Bonbu, MCI_Center, MCI_LOGCNAME, MCI_BonbuNAME, MCI_CenterName, MCI_BRN, MCI_CoName, MCI_CEO, MCI_Addr, MCI_CoType, MCI_Jongmog, MCI_PIC, MCI_PICHP, CONVERT(CHAR(10), MCI_StartDay, 23) as MCI_StartDay, CONVERT(CHAR(10), MCI_EndDay, 23) as MCI_EndDay, MCI_BizSts, MCI_CMNT, MCI_SORT_ORDER from MF_CENTER_INFO where MCI_LOGC = #{LOGC} AND NOT MCI_Bonbu = ' ' AND MCI_Center = ' '
+			union
+			SELECT MCI_LOGC, MCI_Bonbu, MCI_Center, MCI_LOGCNAME, MCI_BonbuNAME, MCI_CenterName, MCI_BRN, MCI_CoName, MCI_CEO, MCI_Addr, MCI_CoType, MCI_Jongmog, MCI_PIC, MCI_PICHP, CONVERT(CHAR(10), MCI_StartDay, 23) as MCI_StartDay, CONVERT(CHAR(10), MCI_EndDay, 23) as MCI_EndDay, MCI_BizSts, MCI_CMNT, MCI_SORT_ORDER from MF_CENTER_INFO where MCI_LOGC = #{LOGC} AND MCI_Bonbu = #{BONBU} AND NOT MCI_Center = ' '
+			) A
+		order by MCI_LOGC, MCI_Bonbu, MCI_SORT_ORDER
+	</select>
+	<select id="getLOGCNAMESearch" resultType="com.vo.CenterVo">
+		SELECT MCI_LOGC, MCI_LOGCNAME FROM MF_CENTER_INFO WHERE MCI_Bonbu = ' ' AND MCI_Center = ' ' 
+		<if test="LNAME != null and LNAME != ''">
+		   AND MCI_LOGCNAME like '%${LNAME}%'
+		</if>
+		order by MCI_LOGC
+	</select>
+	<select id="getBNAMESearch" resultType="com.vo.CenterVo">
+		SELECT MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME FROM MF_CENTER_INFO WHERE NOT MCI_Bonbu = ' ' AND MCI_Center = ' ' 
+		<if test="BNAME != null and BNAME != ''">
+		   AND MCI_BonbuNAME like '%${BNAME}%'
+		</if>
+		order by MCI_LOGC, MCI_Bonbu
+	</select>
+	<select id="getCNAMESearch" resultType="com.vo.CenterVo">
+		SELECT MCI_LOGC, MCI_Bonbu, MCI_Center, MCI_LOGCNAME, MCI_BonbuNAME, MCI_CenterName, MCI_BRN, MCI_CoName, MCI_CEO, MCI_Addr, MCI_CoType, MCI_Jongmog, MCI_PIC, MCI_PICHP, CONVERT(CHAR(10), MCI_StartDay, 23) as MCI_StartDay, CONVERT(CHAR(10), MCI_EndDay, 23) as MCI_EndDay, MCI_BizSts, MCI_CMNT, MCI_SORT_ORDER  FROM MF_CENTER_INFO WHERE NOT MCI_Center = ' ' 
+		<if test="CNAME != null and CNAME != ''">
+		   AND MCI_CenterName like '%${CNAME}%'
+		</if>
+		order by MCI_LOGC, MCI_Bonbu, MCI_SORT_ORDER
+	</select>
+	<insert id="insertCenter" parameterType="com.vo.CenterVo">
+	    insert into MF_CENTER_INFO(MCI_LOGC, MCI_Bonbu, MCI_Center, MCI_LOGCNAME, MCI_BonbuNAME, MCI_CenterName, MCI_CODE, MCI_BRN, 
+	    						MCI_CoName, MCI_CEO, MCI_Addr, MCI_CoType, MCI_Jongmog, MCI_PIC, MCI_PICHP, MCI_StartDay, MCI_EndDay,
+	    						MCI_BizSts, MCI_CMNT, MCI_SORT_ORDER,
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{MCI_LOGC},#{MCI_Bonbu},#{MCI_Center},#{MCI_LOGCNAME},#{MCI_BonbuNAME},#{MCI_CenterName},#{MCI_CODE},#{MCI_BRN},
+	     		#{MCI_CoName},#{MCI_CEO},#{MCI_Addr},#{MCI_CoType},#{MCI_Jongmog},#{MCI_PIC},#{MCI_PICHP},#{MCI_StartDay},#{MCI_EndDay},
+	     		#{MCI_BizSts},#{MCI_CMNT},#{MCI_SORT_ORDER},
+	     		'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<update id="updateLOGCNM" parameterType="com.vo.CenterVo">
+	    update MF_CENTER_INFO 
+	       set MCI_LOGCNAME = #{MCI_LOGCNAME},
+	           CMN_UPD_DATE = getdate(), 
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MCI_LOGC = #{MCI_LOGC}
+	</update>
+	<update id="updateLOGC" parameterType="com.vo.CenterVo">
+	    update MF_CENTER_INFO 
+	       set MCI_BRN = #{MCI_BRN}, 
+	       	   MCI_CoName = #{MCI_CoName}, 
+	       	   MCI_CEO = #{MCI_CEO}, 
+	       	   MCI_Addr = #{MCI_Addr}, 
+	       	   MCI_CoType = #{MCI_CoType}, 
+	       	   MCI_Jongmog = #{MCI_Jongmog}, 
+	       	   MCI_PIC = #{MCI_PIC}, 
+	       	   MCI_PICHP = #{MCI_PICHP}, 
+	       	   CMN_UPD_DATE = getdate(), 
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MCI_LOGC = #{MCI_LOGC}
+	       AND MCI_Bonbu = ' '
+	       AND MCI_Center = ' '
+	</update>
+	<update id="updateBONBU" parameterType="com.vo.CenterVo">
+	    update MF_CENTER_INFO 
+	       set MCI_BonbuNAME = #{MCI_BonbuNAME},
+	       	   CMN_UPD_DATE = getdate(), 
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MCI_LOGC = #{MCI_LOGC}
+	       and MCI_Bonbu = #{MCI_Bonbu}
+	</update>
+	<update id="updateCENTER" parameterType="com.vo.CenterVo">
+	    update MF_CENTER_INFO 
+	       set MCI_CenterName = #{MCI_CenterName},
+	       	   MCI_BRN = #{MCI_BRN}, 
+	       	   MCI_CoName = #{MCI_CoName}, 
+	       	   MCI_CEO = #{MCI_CEO}, 
+	       	   MCI_Addr = #{MCI_Addr}, 
+	       	   MCI_CoType = #{MCI_CoType}, 
+	       	   MCI_Jongmog = #{MCI_Jongmog}, 
+	       	   MCI_PIC = #{MCI_PIC}, 
+	       	   MCI_PICHP = #{MCI_PICHP}, 
+	       	   MCI_StartDay = #{MCI_StartDay}, 
+	       	   MCI_EndDay = #{MCI_EndDay}, 
+	       	   MCI_BizSts = #{MCI_BizSts}, 
+	       	   MCI_CMNT = #{MCI_CMNT}, 
+	       	   MCI_SORT_ORDER = #{MCI_SORT_ORDER}, 
+	       	   CMN_UPD_DATE = getdate(), 
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MCI_LOGC = #{MCI_LOGC}
+	       and MCI_Bonbu = #{MCI_Bonbu}
+	       and MCI_Center = #{MCI_Center}
+	</update>
+	<delete id="deleteLOGC" parameterType="String">
+	    delete from MF_CENTER_INFO
+	    where MCI_LOGC = #{value}
+	</delete>
+	<delete id="deleteBONBU" parameterType="hashmap">
+	    delete from MF_CENTER_INFO
+	     where MCI_LOGC = #{LOGC}
+	       and MCI_Bonbu = #{BONBU}
+	</delete>
+	<delete id="deleteCENTER" parameterType="hashmap">
+	    delete from MF_CENTER_INFO
+	     where MCI_LOGC = #{LOGC}
+	       and MCI_Bonbu = #{BONBU}
+	       and MCI_Center = #{CENTER}
+	</delete>
+	<select id="getAllList" resultType="com.vo.CenterVo" parameterType="hashmap">
+		SELECT MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName, MCI_CODE 
+		  FROM MF_CENTER_INFO 
+         <choose>
+	     <when test="LEVEL == '001' or LEVEL == '002'">
+         WHERE MCI_LOGC = #{LOGC}
+	       AND not MCI_Bonbu = ' '
+	       AND not MCI_Center = ' '
+	     </when>
+	     <when test="LEVEL == '003'">
+         WHERE MCI_LOGC = #{LOGC}
+	       AND MCI_Bonbu = #{BONBU}
+	       AND not MCI_Center = ' '
+	     </when>
+	     <otherwise>
+	     WHERE MCI_LOGC = #{LOGC}
+	       AND MCI_Bonbu = #{BONBU}
+	       AND MCI_Center = #{CENTER}
+	     </otherwise>
+	     </choose>
+		 order by MCI_LOGC, MCI_Bonbu, MCI_SORT_ORDER
+	</select>
+	<select id="getAndroidLOGCInfo" resultType="java.util.LinkedHashMap">
+		SELECT MCI_LOGC, MCI_LOGCNAME FROM MF_CENTER_INFO WHERE MCI_Bonbu = ' ' AND MCI_Center = ' ' order by MCI_LOGC
+	</select>
+	<select id="getAndroidBONBUList" resultType="java.util.LinkedHashMap" parameterType="String">
+		SELECT MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME FROM MF_CENTER_INFO WHERE MCI_LOGC = #{value} AND NOT MCI_Bonbu = ' ' AND MCI_Center = ' ' order by MCI_LOGC, MCI_Bonbu
+	</select>
+	<select id="getAndroidCENTERList" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+		SELECT MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName FROM MF_CENTER_INFO WHERE MCI_LOGC = #{LOGC} AND MCI_Bonbu = #{BONBU} AND NOT MCI_Center = ' ' order by MCI_LOGC, MCI_Bonbu, MCI_SORT_ORDER
+	</select>
+	<select id="getCenterJego" resultType="int" parameterType="String">
+		SELECT ISNULL(SUM(DMJ_JEGO),0)
+	  	  FROM DT_MODEL_JEGO
+     	 WHERE DMJ_CENTER = #{value}
+	</select>
+	<select id="getCenterUser" resultType="int" parameterType="String">
+		SELECT count(*)
+	  	  FROM MF_CENTER_INFO, MF_USER_TBL
+     	 WHERE MUT_Center = MCI_CODE
+     	   AND MCI_CODE = #{value}
+	</select>
+</mapper>

@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="FormatMapper">
+	<select id="getDealFormatList" resultType="com.vo.DealFormatVo" parameterType="hashmap">
+	  SELECT rownum, DDT_DOCNO, DDT_DATE, DDT_STARTDAY, DDT_ENDDAY,
+   	         INCENTER,OUTCENTER,
+			 DDT_INCENTER, DDT_OUTCENTER, DDT_INSTS, DDT_OUTSTS, DDT_CMNT, totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY DDT_DATE desc, DDT_DOCNO) AS rownum, 
+				   DDT_DOCNO, CONVERT(CHAR(10), DDT_DATE, 23) as DDT_DATE,
+				   CONVERT(CHAR(10), DDT_STARTDAY, 23) as DDT_STARTDAY,
+				   CONVERT(CHAR(10), DDT_ENDDAY, 23) as DDT_ENDDAY,
+				   A.MCI_BonbuNAME + ' ' + A.MCI_CenterName as INCENTER,
+				   case when DDT_RESN = '1' then B.MCI_LOGCNAME else B.MCI_BonbuNAME + ' ' + B.MCI_CenterName end as OUTCENTER,
+				   DDT_INCENTER, DDT_OUTCENTER, DDT_INSTS, DDT_OUTSTS, DDT_CMNT,
+			       COUNT(*) OVER() AS totalCnt
+			  FROM DT_DOC_TRAN
+		      	   left outer join MF_CENTER_INFO A on DDT_INCENTER = A.MCI_CODE
+		      	   left outer join MF_CENTER_INFO B on DDT_RESN = '1' and DDT_OUTCENTER = B.MCI_LOGC AND B.MCI_BONBU = ' ' AND B.MCI_CENTER = ' ' or DDT_RESN = '2' and DDT_OUTCENTER = B.MCI_CODE
+			 WHERE 1=1
+		    <if test="StartDay == '' and EndDay != ''">
+		       AND DDT_DATE <![CDATA[<=]]> #{EndDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay == ''">
+		       AND DDT_DATE <![CDATA[>=]]> #{StartDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay != ''">
+		       AND DDT_DATE between #{StartDay} AND #{EndDay}
+		    </if>
+		    <choose>
+		    <when test="CTYPE.equals('') or CTYPE == 1 or CTYPE == 2 ">
+		    <if test="INLOGC != ''">
+		       AND A.MCI_LOGC = #{INLOGC}
+		    </if>
+		    <if test="INBONBU != ''">
+		       AND A.MCI_BONBU = #{INBONBU}
+		    </if>
+		   	<if test="INCENTER != ''">
+		       AND A.MCI_CENTER = #{INCENTER}
+		    </if>
+			<if test="OUTLOGC != ''">
+		       AND B.MCI_LOGC = #{OUTLOGC}
+		    </if>
+		    <if test="OUTBONBU != ''">
+		       AND B.MCI_BONBU = #{OUTBONBU}
+		    </if>
+		   	<if test="OUTCENTER != ''">
+		       AND B.MCI_CENTER = #{OUTCENTER}
+		    </if> 
+		    </when>
+		    <otherwise>
+		    AND ( 
+		    A.MCI_LOGC = #{OUTLOGC} AND A.MCI_BONBU = #{OUTBONBU}
+		   	<if test="OUTCENTER != ''">
+		       AND A.MCI_CENTER = #{OUTCENTER}
+		    </if>
+		    or
+			B.MCI_LOGC = #{OUTLOGC} AND B.MCI_BONBU = #{OUTBONBU}
+		   	<if test="OUTCENTER != ''">
+		       AND B.MCI_CENTER = #{OUTCENTER}
+		    </if> 
+		    )
+		    </otherwise>
+		    </choose>
+		    <if test="INSTSTYPE != ''">
+		       AND DDT_INSTS = #{INSTSTYPE}
+		    </if> 
+		    <if test="OUTSTSTYPE != ''">
+		       AND DDT_OUTSTS = #{OUTSTSTYPE}
+		    </if> 
+		) A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getDealFormatInfo" resultType="com.vo.DealFormatVo" parameterType="String">
+      SELECT DDT_DOCNO, DDT_OUTCENTER, DDT_INCENTER, DDT_RESN,
+      		 CONVERT(CHAR(10), DDT_DATE, 23) as DDT_DATE, 
+	  		 CONVERT(CHAR(10), DDT_STARTDAY, 23) as DDT_STARTDAY, 
+	  		 CONVERT(CHAR(10), DDT_ENDDAY, 23) as DDT_ENDDAY, 
+	  		 case when DDT_RESN = '1' then A.MCI_LOGCNAME + '-' + A.MCI_LOGC else A.MCI_LOGCNAME + ' ' + A.MCI_BonbuNAME + ' ' + A.MCI_CenterName end as OUTCENTERNAME,
+	         A.MCI_BRN as OUTBRN,
+	         A.MCI_CoName AS OUTCONAME, A.MCI_CEO AS OUTCEO,
+	         A.MCI_Addr as OUTADDR, A.MCI_CoType AS OUTCOTYPE, A.MCI_Jongmog as OUTJM,
+	         B.MCI_LOGCNAME + ' ' + B.MCI_BonbuNAME + ' ' + B.MCI_CenterName as INCENTERNAME,
+	         B.MCI_BRN as INBRN, B.MCI_CoName AS INCONAME, B.MCI_CEO AS INCEO,
+	         B.MCI_Addr as INADDR, B.MCI_CoType AS INCOTYPE, B.MCI_Jongmog as INJM,
+	         DDT_INSTS,  CONVERT(CHAR(10), DDT_INSTSDATE, 23) as DDT_INSTSDATE, DDT_INSTSUSER, C.MUT_UserName as INSTSUSERNM,
+	         DDT_OUTSTS,  CONVERT(CHAR(10), DDT_OUTSTSDATE, 23) as DDT_OUTSTSDATE, DDT_OUTSTSUSER, D.MUT_UserName as OUTSTSUSERNM,
+	         DDT_CMNT, C.MUT_SIGN as INSIGN, D.MUT_SIGN as OUTSIGN
+        FROM MF_CENTER_INFO A, MF_CENTER_INFO B, DT_DOC_TRAN
+	         left outer join MF_USER_TBL C on not DDT_INSTS = '0' and DDT_INSTSUSER = C.MUT_UserID
+	         left outer join MF_USER_TBL D on not DDT_OUTSTS = '0' and DDT_OUTSTSUSER = D.MUT_UserID
+	   WHERE DDT_INCENTER = B.MCI_CODE 
+	     AND (DDT_RESN = '2' and DDT_OUTCENTER = A.MCI_CODE or DDT_RESN = '1' AND DDT_OUTCENTER = A.MCI_LOGC AND A.MCI_BONBU = ' ' AND A.MCI_CENTER = ' ')
+		 AND DDT_DOCNO = #{value}
+	</select>
+	<select id="getDealInoutInfo" resultType="com.vo.DealFormatVo" parameterType="hashmap">
+	  SELECT rownum, DOCNO, INDATE, OUTDATE, INCENTER, OUTCENTER, 
+			 MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, MODEL,
+			 totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY OUTDATE, DOCNO) AS rownum, 
+			       DOCNO, INDATE, OUTDATE, INCENTER, OUTCENTER, 
+			       MMC_LGROUP, MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, MODEL,
+			       COUNT(*) OVER() AS totalCnt
+			  FROM (
+			    <if test="OUTBONBU == '' and OUTCENTER == ''">
+				SELECT DBI_DOCNO as DOCNO, CONVERT(CHAR(10), DBI_CFMDATE, 23) as INDATE,
+					   CONVERT(CHAR(10), DIL_OUTDATE, 23) as OUTDATE,
+					   B.MCI_BonbuNAME + ' ' + B.MCI_CenterName as INCENTER,
+					   A.MCI_LOGCNAME as OUTCENTER,
+					   MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME,
+				       MMC_MGROUP, MMC_SGROUP, DIL_MODEL as MODEL
+				  FROM DT_IN_LOGC
+				       left outer join MF_CENTER_INFO A on DIL_LOGC = A.MCI_LOGC AND A.MCI_BONBU = ' ' AND A.MCI_CENTER = ' '
+		    	  	   left outer join MF_MODEL_CODE on DIL_MODEL = MMC_CODE
+				       left outer join MF_COMM_CODE on MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE,
+				   	   DT_BONBU_IN
+				   	   left outer join MF_CENTER_INFO B on DBI_CENTER = B.MCI_CODE
+				 WHERE DIL_OUTSts = 'Y'
+				   AND DBI_BisSts = 'Y'
+				   AND DIL_DOCNO = DBI_TOPDOCNO
+			    <if test="StartDay == '' and EndDay != ''">
+		  	       AND DIL_OUTDATE <![CDATA[<=]]> #{EndDay}
+		   	 	</if>
+		   	 	<if test="StartDay != '' and EndDay == ''">
+		       	   AND DIL_OUTDATE <![CDATA[>=]]> #{StartDay}
+		    	</if>
+		    	<if test="StartDay != '' and EndDay != ''">
+		           AND DIL_OUTDATE between #{StartDay} AND #{EndDay}
+		    	</if>
+		    	<if test="INLOGC != ''">
+		           AND B.MCI_LOGC = #{INLOGC}
+		    	</if>
+		    	<if test="INBONBU != ''">
+		           AND B.MCI_BONBU = #{INBONBU}
+		    	</if>
+		   		<if test="INCENTER != ''">
+		           AND B.MCI_CENTER = #{INCENTER}
+		    	</if>
+				<if test="OUTLOGC != ''">
+		           AND A.MCI_LOGC = #{OUTLOGC}
+		    	</if>
+		    	<if test="MNAME != null and MNAME != ''">
+		           AND DIL_MODEL like '%${MNAME}%'
+		    	</if>
+		        UNION ALL
+		        </if>
+		        SELECT DBM_DOCNO as DOCNO, CONVERT(CHAR(10), DBO_CFMDATE, 23) as INDATE,
+		               CONVERT(CHAR(10), DBM_DATE, 23) as OUTDATE,
+		               B.MCI_BonbuNAME + ' ' + B.MCI_CenterName as INCENTER,
+		               A.MCI_BonbuNAME + ' ' + A.MCI_CenterName as OUTCENTER,
+		               MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME,
+				       MMC_MGROUP, MMC_SGROUP, DBO_MODEL as MODEL
+				  FROM DT_BONBU_ORDER
+				       left outer join MF_CENTER_INFO B on DBO_CENTER = B.MCI_CODE
+		    	  	   left outer join MF_MODEL_CODE on DBO_MODEL = MMC_CODE
+				       left outer join MF_COMM_CODE on MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE,
+				       DT_BONBU_MOVE
+				       left outer join MF_CENTER_INFO A on DBM_CENTER = A.MCI_CODE
+				 WHERE DBO_DOCNO = DBM_DOCNO
+				   AND DBO_BisSts = 'Y'
+				   AND DBM_CFM = 'Y'
+				   AND DBM_Sts = 'Y'
+				<if test="StartDay == '' and EndDay != ''">
+		  	       AND DBM_DATE <![CDATA[<=]]> #{EndDay}
+		   	 	</if>
+		   	 	<if test="StartDay != '' and EndDay == ''">
+		       	   AND DBM_DATE <![CDATA[>=]]> #{StartDay}
+		    	</if>
+		    	<if test="StartDay != '' and EndDay != ''">
+		           AND DBM_DATE between #{StartDay} AND #{EndDay}
+		    	</if>
+		    	<if test="INLOGC != ''">
+		           AND B.MCI_LOGC = #{INLOGC}
+		    	</if>
+		    	<if test="INBONBU != ''">
+		           AND B.MCI_BONBU = #{INBONBU}
+		    	</if>
+		   		<if test="INCENTER != ''">
+		           AND B.MCI_CENTER = #{INCENTER}
+		    	</if>
+				<if test="OUTLOGC != ''">
+		           AND A.MCI_LOGC = #{OUTLOGC}
+		    	</if>
+		    	<if test="OUTBONBU != ''">
+		           AND A.MCI_BONBU = #{OUTBONBU}
+		    	</if>
+		   		<if test="OUTCENTER != ''">
+		           AND A.MCI_CENTER = #{OUTCENTER}
+		    	</if>
+		    	<if test="MNAME != null and MNAME != ''">
+		           AND DBO_MODEL like '%${MNAME}%'
+		    	</if>
+		    ) SUB
+		) A
+		<if test="PTYPE == 1">
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+		</if>
+	</select>
+	<insert id="insertDocTRAN" parameterType="com.vo.DealFormatVo">
+		INSERT INTO DT_DOC_TRAN (DDT_DOCNO, DDT_SEQ, DDT_DATE, DDT_RESN, DDT_STARTDAY, DDT_ENDDAY, DDT_INCENTER, DDT_OUTCENTER, DDT_INSTS, DDT_OUTSTS, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID) 
+		values (#{DDT_DOCNO}, #{DDT_SEQ}, getdate(), #{DDT_RESN}, #{DDT_STARTDAY}, #{DDT_ENDDAY}, #{DDT_INCENTER},#{DDT_OUTCENTER},'0', '0', 'N', getdate(), #{CMN_MAK_PROG}, #{CMN_MAK_ID}, getdate(), #{CMN_UPD_PROG}, #{CMN_UPD_ID})
+	</insert>
+	<select id="getFormatLogcInfo" resultType="com.vo.DealFormatVo" parameterType="String">
+	  SELECT DBI_DOCNO as DOCNO, DBI_CENTER as INCENTER, DIL_LOGC as OUTCENTER, 
+			 DIL_MODEL as MODEL, DBI_QTY as QTY, '1' as DDT_RESN,
+			 CONVERT(CHAR(10), DIL_OUTDATE, 23) as OUTDATE
+		FROM DT_IN_LOGC, DT_BONBU_IN
+	   WHERE DIL_OUTSts = 'Y'
+		 AND DBI_BisSts = 'Y'
+		 AND DIL_DOCNO = DBI_TOPDOCNO
+		 AND DBI_DOCNO = #{value}
+	</select>
+	<select id="getFormatBonbuInfo" resultType="com.vo.DealFormatVo" parameterType="String">
+	  SELECT DBO_DOCNO as DOCNO, DBO_CENTER as INCENTER, DBM_CENTER as OUTCENTER, 
+			 DBO_MODEL as MODEL, DBM_QTY as QTY, '2' as DDT_RESN,
+			 CONVERT(CHAR(10), DBM_DATE, 23) as OUTDATE
+		FROM DT_BONBU_ORDER, DT_BONBU_MOVE
+	   WHERE DBO_DOCNO = DBM_DOCNO
+	     AND DBO_BisSts = 'Y'
+		 AND DBM_CFM = 'Y'
+		 AND DBM_Sts = 'Y'
+		 AND DBO_DOCNO = #{value}
+	</select>
+	<select id="getFormatModelList" resultType="com.vo.DealModelVo" parameterType="String">
+	  SELECT DDM_SUBDOCNO, DATEPART(mm, DDM_DATE) as MMDATE, DATEPART(dd, DDM_DATE) as DDDATE, 
+	         MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, DDM_MODEL, ISNULL(DDM_QTY, 0) AS DDM_QTY, MMC_UNIT
+		FROM DT_DOCTRAN_MODEL
+		     left outer join MF_MODEL_CODE on DDM_MODEL = MMC_CODE
+			 left outer join MF_COMM_CODE on MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+	   WHERE DDM_DOCNO = #{value}
+	   ORDER BY DDM_DATE, DDM_SUBDOCNO
+	</select>
+	<select id="getLastFormatDocNo" resultType="com.vo.DealFormatVo">
+		SELECT CONVERT(CHAR(8), GETDATE(), 112) as CMN_MAK_DATE, ISNULL(MAX(DDT_SEQ), 0) AS DDT_SEQ
+		  FROM DT_DOC_TRAN 
+		 WHERE convert(char(8), CMN_MAK_DATE , 112) = CONVERT(CHAR(8), GETDATE(), 112)
+	</select>
+	<insert id="insertDocTRANModel" parameterType="com.vo.DealModelVo">
+		INSERT INTO DT_DOCTRAN_MODEL (DDM_DOCNO, DDM_SUBDOCNO, DDM_MODEL, DDM_DATE, DDM_QTY, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID) 
+		values (#{DDM_DOCNO}, #{DDM_SUBDOCNO}, #{DDM_MODEL}, #{DDM_DATE}, #{DDM_QTY}, 'N', getdate(), #{CMN_MAK_PROG}, #{CMN_MAK_ID}, getdate(), #{CMN_UPD_PROG}, #{CMN_UPD_ID})
+	</insert>
+	<update id="updateDocTRANCfm" parameterType="com.vo.DealFormatVo">
+		update DT_DOC_TRAN set 
+		<if test="DDT_INSTS != ''"> 
+		DDT_INSTS = #{DDT_INSTS}, 
+		DDT_INSTSDATE = getdate(), 
+		DDT_INSTSUSER = #{CMN_UPD_ID},
+		</if> 
+		<if test="DDT_OUTSTS != ''"> 
+		DDT_OUTSTS = #{DDT_OUTSTS}, 
+		DDT_OUTSTSDATE = getdate(), 
+		DDT_OUTSTSUSER = #{CMN_UPD_ID},
+		</if> 
+		DDT_CMNT = #{DDT_CMNT}, 
+		CMN_UPD_DATE = getdate(), 
+		CMN_UPD_PROG = #{CMN_UPD_PROG}, 
+		CMN_UPD_ID = #{CMN_UPD_ID} 
+		where DDT_DOCNO = #{DDT_DOCNO}
+	</update>
+	<select id="getJegoFormatList" resultType="com.vo.JegoFormatVo" parameterType="hashmap">
+	  SELECT rownum, DDJ_DOCNO, DDJ_DATE, DDJ_INFODATE, JEGOCENTER,
+   	         DDJ_STS, DDJ_CMNT, totalCnt
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY DDJ_DATE desc, DDJ_DOCNO) AS rownum, 
+				   DDJ_DOCNO, CONVERT(CHAR(10), DDJ_DATE, 23) as DDJ_DATE,
+				   CONVERT(CHAR(10), DDJ_INFODATE, 23) as DDJ_INFODATE,
+				   MCI_BonbuNAME + ' ' + MCI_CenterName as JEGOCENTER,
+				   DDJ_STS, DDJ_CMNT, COUNT(*) OVER() AS totalCnt
+			  FROM DT_DOC_JEGO
+		      	   left outer join MF_CENTER_INFO on DDJ_CENTER = MCI_CODE
+		     WHERE 1=1
+		    <if test="StartDay == '' and EndDay != ''">
+		       AND DDJ_DATE <![CDATA[<=]]> #{EndDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay == ''">
+		       AND DDJ_DATE <![CDATA[>=]]> #{StartDay}
+		    </if>
+		    <if test="StartDay != '' and EndDay != ''">
+		       AND DDJ_DATE between #{StartDay} AND #{EndDay}
+		    </if>
+		    <if test="LOGC != ''">
+		       AND MCI_LOGC = #{LOGC}
+		    </if>
+		    <if test="BONBU != ''">
+		       AND MCI_BONBU = #{BONBU}
+		    </if>
+		   	<if test="CENTER != ''">
+		       AND MCI_CENTER = #{CENTER}
+		    </if>
+		    <if test="STSTYPE != ''">
+		       AND DDJ_STS = #{STSTYPE}
+		    </if> 
+		) A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getLastJegoFormatDocNo" resultType="com.vo.JegoFormatVo">
+		SELECT CONVERT(CHAR(8), GETDATE(), 112) as CMN_MAK_DATE, ISNULL(MAX(DDJ_SEQ), 0) AS DDJ_SEQ
+		  FROM DT_DOC_JEGO 
+		 WHERE convert(char(8), CMN_MAK_DATE , 112) = CONVERT(CHAR(8), GETDATE(), 112)
+	</select>
+	<insert id="insertJegoDocTRAN" parameterType="com.vo.JegoFormatVo">
+		INSERT INTO DT_DOC_JEGO (DDJ_DOCNO, DDJ_SEQ, DDJ_DATE, DDJ_INFODATE, DDJ_CENTER, DDJ_STS, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID) 
+		values (#{DDJ_DOCNO}, #{DDJ_SEQ}, getdate(), #{DDJ_INFODATE}, #{DDJ_CENTER}, '0', 'N', getdate(), #{CMN_MAK_PROG}, #{CMN_MAK_ID}, getdate(), #{CMN_UPD_PROG}, #{CMN_UPD_ID})
+	</insert>
+	<insert id="insertJegoDocTRANModel" parameterType="com.vo.JegoModelVo">
+		INSERT INTO DT_DOCJEGO_MODEL (DDM_DOCNO, DDM_MODEL, DDM_JEGO, CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID) 
+		values (#{DDM_DOCNO}, #{DDM_MODEL}, #{DDM_JEGO}, 'N', getdate(), #{CMN_MAK_PROG}, #{CMN_MAK_ID}, getdate(), #{CMN_UPD_PROG}, #{CMN_UPD_ID})
+	</insert>
+	<select id="getJegoFormatInfo" resultType="com.vo.JegoFormatVo" parameterType="String">
+      SELECT DDJ_DOCNO, DDJ_CENTER,
+      		 CONVERT(CHAR(10), DDJ_DATE, 23) as DDJ_DATE, 
+	  		 CONVERT(CHAR(10), DDJ_INFODATE, 23) as DDJ_INFODATE,
+	  		 MCI_BonbuNAME + ' ' + MCI_CenterName as CENTERNAME,
+	         MCI_BRN as BRN, MCI_CoName AS CONAME, MCI_CEO AS CEO,
+	         MCI_Addr as ADDR, MCI_CoType AS COTYPE, MCI_Jongmog as JM,
+	         DDJ_STS,  CONVERT(CHAR(10), DDJ_STSDATE, 23) as DDJ_STSDATE, DDJ_STSUSER,
+	         DDJ_CMNT, MUT_SIGN as USERSIGN, MUT_UserName as DDJ_USER
+        FROM MF_CENTER_INFO, DT_DOC_JEGO
+	         left outer join MF_USER_TBL on DT_DOC_JEGO.CMN_MAK_ID = MUT_UserID
+	   WHERE DDJ_CENTER = MCI_CODE
+	     AND DDJ_DOCNO = #{value}
+	</select>
+	<update id="updateJegoDocTRANCfm" parameterType="com.vo.JegoFormatVo">
+		update DT_DOC_JEGO set 
+		DDJ_STS = #{DDJ_STS}, 
+		DDJ_STSDATE = getdate(), 
+		DDJ_STSUSER = #{CMN_UPD_ID},
+		DDJ_CMNT = #{DDJ_CMNT}, 
+		CMN_UPD_DATE = getdate(), 
+		CMN_UPD_PROG = #{CMN_UPD_PROG}, 
+		CMN_UPD_ID = #{CMN_UPD_ID} 
+		where DDJ_DOCNO = #{DDJ_DOCNO}
+	</update>
+	<select id="getJegoFormatModelList" resultType="com.vo.JegoModelVo" parameterType="String">
+	  SELECT DDM_DOCNO, DDM_MODEL, ISNULL(DDM_JEGO, 0) AS DDM_JEGO,
+	         MMC_LGROUP, MCC_S_NAME as MMC_LGROUPNAME, MMC_MGROUP, MMC_SGROUP, MMC_UNIT
+		FROM DT_DOCJEGO_MODEL
+		     left outer join MF_MODEL_CODE on DDM_MODEL = MMC_CODE
+			 left outer join MF_COMM_CODE on MCC_L_CODE = '200' AND MCC_M_CODE = '201' AND MMC_LGROUP = MCC_S_CODE
+	   WHERE DDM_DOCNO = #{value}
+	   ORDER BY DDM_MODEL
+	</select>
+</mapper>

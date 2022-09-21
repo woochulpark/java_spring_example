@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="CodeMapper">
+	<select id="getMCodeList" resultType="com.vo.CodeVo" parameterType="hashmap">
+		SELECT MCC_L_CODE, MCC_L_NAME, MCC_M_CODE, MCC_M_NAME FROM MF_COMM_CODE WHERE MCC_L_CODE = #{LCODE} AND MCC_M_CODE = ' ' AND MCC_S_CODE = ' ' order by MCC_L_CODE, MCC_M_CODE
+	</select>
+	<select id="getSCodeList" resultType="com.vo.CodeVo" parameterType="hashmap">
+		SELECT MCC_L_CODE, MCC_L_NAME, MCC_M_CODE, MCC_M_NAME, MCC_S_CODE, MCC_S_NAME FROM MF_COMM_CODE WHERE MCC_L_CODE = #{LCODE} AND MCC_M_CODE = #{MCODE} AND NOT MCC_S_CODE = ' ' order by MCC_L_CODE, MCC_M_CODE, MCC_SORT_ORDER
+	</select>
+	<select id="getLcodeInfo" resultType="com.vo.CodeVo">
+		SELECT MCC_L_CODE, MCC_L_NAME FROM MF_COMM_CODE WHERE MCC_M_CODE = ' ' AND MCC_S_CODE = ' ' order by MCC_L_CODE
+	</select>
+	<select id="getLcodeInfo_Detail" resultType="com.vo.CodeVo">
+		SELECT MCC_L_CODE, MCC_L_NAME FROM MF_COMM_CODE WHERE MCC_M_CODE = ' ' AND MCC_S_CODE = ' ' AND MCC_L_CODE = #{LCODE}
+	</select>
+	<select id="getMcodeInfo_Detail" resultType="com.vo.CodeVo">
+		SELECT MCC_L_CODE, MCC_L_NAME,MCC_M_CODE, MCC_M_NAME FROM MF_COMM_CODE WHERE MCC_S_CODE = ' ' AND MCC_L_CODE = #{LCODE} AND MCC_M_CODE = #{MCODE}
+	</select>
+	<select id="getScodeInfo_Detail" resultType="com.vo.CodeVo">
+		SELECT MCC_L_CODE, MCC_L_NAME,MCC_M_CODE,MCC_M_NAME,MCC_S_CODE,MCC_S_NAME,MCC_SORT_ORDER,MCC_CODE_REMARK FROM MF_COMM_CODE WHERE MCC_L_CODE = #{LCODE} AND MCC_M_CODE = #{MCODE} AND MCC_S_CODE = #{SCODE}
+	</select>
+	<select id="getLcodeDetail" resultType="com.vo.CodeVo" parameterType="hashmap">
+		select * from (
+			select MCC_L_CODE, MCC_M_CODE, MCC_L_NAME, MCC_M_NAME from MF_COMM_CODE where MCC_M_CODE = ' ' 
+			union
+			select MCC_L_CODE, MCC_M_CODE, MCC_L_NAME, MCC_M_NAME from MF_COMM_CODE where MCC_L_CODE = #{LCODE}
+			) a
+		order by MCC_L_CODE, MCC_M_CODE
+	</select>
+	<select id="getMcodeDetail" resultType="com.vo.CodeVo" parameterType="hashmap">
+		select * from (
+			select MCC_L_CODE, MCC_M_CODE, MCC_S_CODE, MCC_L_NAME, MCC_M_NAME, MCC_S_NAME, MCC_SORT_ORDER, MCC_CODE_REMARK from MF_COMM_CODE where MCC_M_CODE = ' ' 
+			union
+			select MCC_L_CODE, MCC_M_CODE, MCC_S_CODE, MCC_L_NAME, MCC_M_NAME, MCC_S_NAME, MCC_SORT_ORDER, MCC_CODE_REMARK from MF_COMM_CODE where MCC_L_CODE = #{LCODE} AND NOT MCC_M_CODE = ' ' AND MCC_S_CODE = ' '
+			union
+			select MCC_L_CODE, MCC_M_CODE, MCC_S_CODE, MCC_L_NAME, MCC_M_NAME, MCC_S_NAME, MCC_SORT_ORDER, MCC_CODE_REMARK from MF_COMM_CODE where MCC_L_CODE = #{LCODE} AND MCC_M_CODE = #{MCODE} AND NOT MCC_S_CODE = ' '
+			) A
+		order by MCC_L_CODE, MCC_M_CODE, MCC_SORT_ORDER
+	</select>
+	<select id="getLNAMESearch" resultType="com.vo.CodeVo">
+		SELECT MCC_L_CODE, MCC_L_NAME FROM MF_COMM_CODE WHERE MCC_M_CODE = ' ' AND MCC_S_CODE = ' ' 
+		<if test="LNAME != null and LNAME != ''">
+		   AND MCC_L_NAME like '%${LNAME}%'
+		</if>
+		order by MCC_L_CODE
+	</select>
+	<select id="getMNAMESearch" resultType="com.vo.CodeVo">
+		SELECT MCC_L_CODE, MCC_L_NAME, MCC_M_CODE, MCC_M_NAME FROM MF_COMM_CODE WHERE NOT MCC_M_CODE = ' ' AND MCC_S_CODE = ' ' 
+		<if test="MNAME != null and MNAME != ''">
+		   AND MCC_M_NAME like '%${MNAME}%'
+		</if>
+		order by MCC_L_CODE, MCC_M_CODE
+	</select>
+	<select id="getSNAMESearch" resultType="com.vo.CodeVo">
+		SELECT MCC_L_CODE, MCC_M_CODE, MCC_S_CODE, MCC_L_NAME, MCC_M_NAME, MCC_S_NAME, MCC_SORT_ORDER, MCC_CODE_REMARK  FROM MF_COMM_CODE WHERE NOT MCC_S_CODE = ' ' 
+		<if test="SNAME != null and SNAME != ''">
+		   AND MCC_S_NAME like '%${SNAME}%'
+		</if>
+		order by MCC_L_CODE, MCC_M_CODE, MCC_SORT_ORDER
+	</select>
+	<insert id="insertCODE" parameterType="com.vo.CodeVo">
+	    insert into MF_COMM_CODE(MCC_L_CODE, MCC_M_CODE, MCC_S_CODE, MCC_L_NAME, MCC_M_NAME, MCC_S_NAME, MCC_SORT_ORDER, MCC_CODE_REMARK, 
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{MCC_L_CODE},#{MCC_M_CODE},#{MCC_S_CODE},#{MCC_L_NAME},#{MCC_M_NAME},#{MCC_S_NAME},#{MCC_SORT_ORDER},#{MCC_CODE_REMARK},
+	     		'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<update id="updateLCODE" parameterType="com.vo.CodeVo">
+	    update MF_COMM_CODE 
+	       set MCC_L_NAME = #{MCC_L_NAME},
+	       	   CMN_UPD_DATE = getdate(), 
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MCC_L_CODE = #{MCC_L_CODE}
+	</update>
+	<update id="updateMCODE" parameterType="com.vo.CodeVo">
+	    update MF_COMM_CODE 
+	       set MCC_M_NAME = #{MCC_M_NAME},
+	       	   CMN_UPD_DATE = getdate(), 
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MCC_L_CODE = #{MCC_L_CODE}
+	       and MCC_M_CODE = #{MCC_M_CODE}
+	</update>
+	<update id="updateSCODE" parameterType="com.vo.CodeVo">
+	    update MF_COMM_CODE 
+	       set MCC_S_NAME = #{MCC_S_NAME},
+	       	   MCC_SORT_ORDER = #{MCC_SORT_ORDER}, 
+	       	   MCC_CODE_REMARK = #{MCC_CODE_REMARK}, 
+	       	   CMN_UPD_DATE = getdate(), 
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MCC_L_CODE = #{MCC_L_CODE}
+	       and MCC_M_CODE = #{MCC_M_CODE}
+	       and MCC_S_CODE = #{MCC_S_CODE}
+	</update>
+	<delete id="deleteCODE" parameterType="String">
+	    delete from MF_COMM_CODE
+	    where MCC_L_CODE = #{value}
+	</delete>
+	<delete id="deleteMCODE" parameterType="hashmap">
+	    delete from MF_COMM_CODE
+	     where MCC_L_CODE = #{LCODE}
+	       and MCC_M_CODE = #{MCODE}
+	</delete>
+	<delete id="deleteSCODE" parameterType="hashmap">
+	    delete from MF_COMM_CODE
+	     where MCC_L_CODE = #{LCODE}
+	       and MCC_M_CODE = #{MCODE}
+	       and MCC_S_CODE = #{SCODE}
+	</delete>
+	<select id="getAndroidSCodeList" resultType="java.util.LinkedHashMap" parameterType="hashmap">
+		SELECT MCC_L_CODE, MCC_L_NAME, MCC_M_CODE, MCC_M_NAME, MCC_S_CODE, MCC_S_NAME FROM MF_COMM_CODE WHERE MCC_L_CODE = #{LCODE} AND MCC_M_CODE = #{MCODE} AND NOT MCC_S_CODE = ' ' order by MCC_L_CODE, MCC_M_CODE, MCC_SORT_ORDER
+	</select>
+</mapper>

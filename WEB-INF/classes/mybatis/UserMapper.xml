@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="UserMapper">
+	<select id="getUserInfo" resultType="com.vo.UserVo" parameterType="hashmap">
+		SELECT MUT_USERID, MUT_USERNAME, MUT_USERPWD, MUT_CENTER, 
+			   MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			   MUT_POSITION, MCC_S_NAME AS POSITIONNAME, MUT_HP_TEL,
+			   CONVERT(CHAR(10), MUT_STARTDAY, 23) as MUT_STARTDAY, CONVERT(CHAR(10), MUT_ENDDAY, 23) as MUT_ENDDAY,
+			   MUT_BIZSTS, MUT_SIGN, MUT_SIGN_ORG
+		  FROM MF_USER_TBL 
+			   left outer join MF_CENTER_INFO on MUT_CENTER = MCI_CODE
+			   left outer join MF_COMM_CODE on MCC_L_CODE = '100' AND MCC_M_CODE = 'POZSN' AND MUT_POSITION = MCC_S_CODE
+		 WHERE MUT_UserID = #{USERID}
+	</select>
+	<select id="getDealUserInfo" resultType="com.vo.UserVo" parameterType="hashmap">
+		SELECT MUT_USERID, MUT_USERNAME, MUT_USERPWD, MUT_CENTER, 
+			   MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			   MUT_POSITION, MCC_S_NAME AS POSITIONNAME, MUT_HP_TEL,
+			   CONVERT(CHAR(10), MUT_STARTDAY, 23) as MUT_STARTDAY, CONVERT(CHAR(10), MUT_ENDDAY, 23) as MUT_ENDDAY,
+			   MUT_BIZSTS, MUT_SIGN, MUT_SIGN_ORG
+		  FROM MF_USER_TBL
+		 WHERE MUT_Center = #{CENTER}
+		   AND MUT_BizSts = 'Y'
+		   AND (MUT_Position = '003' or MUT_Position = '004')
+	</select>
+	<select id="getUserList" resultType="com.vo.UserVo" parameterType="hashmap">
+		SELECT rownum, MUT_USERID, MUT_USERNAME, MUT_USERPWD, MUT_CENTER, 
+			   MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			   MUT_POSITION, POSITIONNAME, MUT_HP_TEL, MUT_STARTDAY, MUT_ENDDAY, MUT_BIZSTS, MUT_SIGN, MUT_SIGN_ORG, totalCnt 
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY MCI_LOGC, MCI_Bonbu, MCI_SORT_ORDER, MUT_USERNAME) AS rownum, 
+			       MUT_USERID, MUT_USERNAME, MUT_USERPWD, MUT_CENTER, 
+			       MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			       MUT_POSITION, MCC_S_NAME AS POSITIONNAME, MUT_HP_TEL,
+			       CONVERT(CHAR(10), MUT_STARTDAY, 23) as MUT_STARTDAY, CONVERT(CHAR(10), MUT_ENDDAY, 23) as MUT_ENDDAY,
+			       MUT_BIZSTS, MUT_SIGN, MUT_SIGN_ORG,
+				   COUNT(*) OVER() AS totalCnt
+		      FROM MF_USER_TBL 
+			       left outer join MF_CENTER_INFO on MUT_CENTER = MCI_CODE
+			       left outer join MF_COMM_CODE on MCC_L_CODE = '100' AND MCC_M_CODE = 'POZSN' AND MUT_POSITION = MCC_S_CODE
+		     WHERE 1=1
+		    <if test="LOGC != null and LOGC != ''">
+		       AND MCI_LOGC = #{LOGC}
+		    </if>
+		    <if test="BONBU != null and BONBU != ''">
+		       AND MCI_BONBU = #{BONBU}
+		    </if>
+		    <if test="CENTER != null and CENTER != ''">
+		       AND MCI_CENTER = #{CENTER}
+		    </if>
+		    <if test="UNAME != null and UNAME != ''">
+		       AND MUT_USERNAME like '%${UNAME}%'
+		    </if>
+		)A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getPOPUserList" resultType="com.vo.UserVo" parameterType="hashmap">
+		SELECT rownum, MUT_USERID, MUT_USERNAME, MUT_USERPWD, MUT_CENTER, 
+			   MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			   MUT_POSITION, POSITIONNAME, MUT_HP_TEL, MUT_STARTDAY, MUT_ENDDAY, MUT_BIZSTS, MUT_SIGN, MUT_SIGN_ORG, totalCnt 
+		FROM
+		(
+			SELECT ROW_NUMBER() OVER(ORDER BY MCI_LOGC, MCI_Bonbu, MCI_SORT_ORDER, MUT_USERNAME) AS rownum, 
+			       MUT_USERID, MUT_USERNAME, MUT_USERPWD, MUT_CENTER, 
+			       MCI_LOGC, MCI_LOGCNAME, MCI_Bonbu, MCI_BonbuNAME, MCI_Center, MCI_CenterName,
+			       MUT_POSITION, MCC_S_NAME AS POSITIONNAME, MUT_HP_TEL,
+			       CONVERT(CHAR(10), MUT_STARTDAY, 23) as MUT_STARTDAY, CONVERT(CHAR(10), MUT_ENDDAY, 23) as MUT_ENDDAY,
+			       MUT_BIZSTS, MUT_SIGN, MUT_SIGN_ORG,
+				   COUNT(*) OVER() AS totalCnt
+		      FROM MF_USER_TBL 
+			       left outer join MF_CENTER_INFO on MUT_CENTER = MCI_CODE
+			       left outer join MF_COMM_CODE on MCC_L_CODE = '100' AND MCC_M_CODE = 'POZSN' AND MUT_POSITION = MCC_S_CODE
+		     WHERE 1=1
+		       AND MUT_BizSts = 'Y'
+		    <if test="LOGC != null and LOGC != ''">
+		       AND MCI_LOGC = #{LOGC}
+		    </if>
+		    <if test="BONBU != null and BONBU != ''">
+		       AND MCI_BONBU = #{BONBU}
+		    </if>
+		    <if test="CENTER != null and CENTER != ''">
+		       AND MCI_CENTER = #{CENTER}
+		    </if>
+		    <if test="UNAME != null and UNAME != ''">
+		       AND MUT_USERNAME like '%${UNAME}%'
+		    </if>
+		)A
+		WHERE rownum BETWEEN ((#{PAGE}-1)*#{PSIZE})+1 AND (#{PAGE}*#{PSIZE})
+	</select>
+	<select id="getIDCHECK" parameterType="String"  resultType="java.lang.Integer" >
+	 	SELECT count(*)
+	 	FROM MF_USER_TBL
+	 	WHERE MUT_UserID = #{value}
+	</select>
+	<insert id="insertUser" parameterType="com.vo.UserVo">
+	    insert into MF_USER_TBL(MUT_UserID, MUT_UserName, MUT_UserPWD, MUT_Center, MUT_Position, MUT_HP_Tel, MUT_StartDay, MUT_EndDay, 
+	    						MUT_BizSts, MUT_SIGN, MUT_SIGN_Org, 
+	    						CMN_DEL_STS, CMN_MAK_DATE, CMN_MAK_PROG, CMN_MAK_ID, CMN_UPD_DATE, CMN_UPD_PROG, CMN_UPD_ID)
+	     values(#{MUT_USERID},#{MUT_USERNAME},#{MUT_USERPWD},#{MUT_CENTER},#{MUT_POSITION},#{MUT_HP_TEL},#{MUT_STARTDAY},#{MUT_ENDDAY},
+	     		#{MUT_BIZSTS},#{MUT_SIGN},#{MUT_SIGN_ORG},
+	     		'N',getdate(),#{CMN_MAK_PROG},#{CMN_MAK_ID},getdate(),#{CMN_UPD_PROG},#{CMN_UPD_ID})
+	</insert>
+	<update id="updateUser" parameterType="com.vo.UserVo">
+	    update MF_USER_TBL 
+	       set 
+	       	   <if test="MUT_USERNAME != null and MUT_USERNAME != ''">
+	       	   MUT_UserName = #{MUT_USERNAME},
+	       	   </if>
+	       	   <if test="MUT_USERPWD != null and MUT_USERPWD != ''">
+		       MUT_UserPWD = #{MUT_USERPWD},
+		       </if>
+		       <if test="MUT_CENTER != null and MUT_CENTER != ''">
+	       	   MUT_Center = #{MUT_CENTER},
+	       	   </if>
+	       	   <if test="MUT_POSITION != null and MUT_POSITION != ''">
+	       	   MUT_Position = #{MUT_POSITION},
+	       	   </if>
+	       	   <if test="MUT_HP_TEL != null and MUT_HP_TEL != ''">
+	       	   MUT_HP_Tel = #{MUT_HP_TEL},
+	       	   </if>
+	       	   <if test="MUT_STARTDAY != null and MUT_STARTDAY != ''">
+	       	   MUT_StartDay = #{MUT_STARTDAY},
+	       	   </if>
+	       	   <if test="MUT_ENDDAY != null and MUT_ENDDAY != ''">
+	       	   MUT_EndDay = #{MUT_ENDDAY},
+	       	   </if>
+	       	   <if test="MUT_BIZSTS != null and MUT_BIZSTS != ''">
+	       	   MUT_BizSts = #{MUT_BIZSTS},
+	       	   </if>
+	       	   <if test="MUT_SIGN != null and MUT_SIGN != ''">
+	       	   MUT_SIGN = #{MUT_SIGN},
+	       	   </if>
+	       	   <if test="MUT_SIGN_ORG != null and MUT_SIGN_ORG != ''">
+	       	   MUT_SIGN_Org = #{MUT_SIGN_ORG},
+	       	   </if>
+	       	   CMN_UPD_DATE = getdate(), 
+	       	   CMN_UPD_PROG = #{CMN_UPD_PROG},
+	       	   CMN_UPD_ID = #{CMN_UPD_ID}
+	     where MUT_UserID = #{MUT_USERID}
+	</update>
+	<delete id="deleteUser" parameterType="String">
+	    delete from MF_USER_TBL
+	     where MUT_UserID = #{value}
+	</delete>
+</mapper>
